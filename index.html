@@ -107,7 +107,7 @@ input[type=range]{width:100%;accent-color:#ef7f2e}
 </div>
 <div id="panel"><div class="win" id="pw"></div></div>
 <div id="modal"><div class="win" id="mw"></div></div>
-<div id="tap"><h1>LAST LIGHT</h1><p>ORBITAL RECOVERY</p><small>Fly the KnightShip Ex-3 with Azure. Take contracts, let the autopilot handle the orbit transfer, then grab, fix and haul satellites by hand.<br><br>Touch: joystick + buttons · Keys: WASD fly · Shift boost · B brake · Space action · M map</small><button id="go" class="hot" style="font-size:15px;padding:14px 24px">TAP TO START</button><div style="margin-top:14px;display:flex;gap:8px;justify-content:center"><button id="llExp" style="font-size:11px;padding:8px 12px">EXPORT SAVE</button><button id="llImp" style="font-size:11px;padding:8px 12px">IMPORT SAVE</button></div><input id="llFile" type="file" accept=".json,application/json" style="display:none"></div>
+<div id="tap"><h1>LAST LIGHT</h1><p>ORBITAL RECOVERY</p><small>Fly the KnightShip Ex-3 with Azure. Take contracts, let the autopilot handle the orbit transfer, then grab, fix and haul satellites by hand.<br><br>Touch: joystick + buttons · Keys: WASD fly · Shift boost · B brake · IJKL RCS strafe · Space action · M map</small><button id="go" class="hot" style="font-size:15px;padding:14px 24px">TAP TO START</button><div style="margin-top:14px;display:flex;gap:8px;justify-content:center"><button id="llExp" style="font-size:11px;padding:8px 12px">EXPORT SAVE</button><button id="llImp" style="font-size:11px;padding:8px 12px">IMPORT SAVE</button></div><input id="llFile" type="file" accept=".json,application/json" style="display:none"></div>
 <script>
 'use strict';
 // ================= PALETTE / SPRITES =================
@@ -422,6 +422,7 @@ function arenaStep(dt){const s=G.ship,a=anchor();if(G.docked||G.anim)return;
  if(stab){s.w*=Math.exp(-1.3*dt);s.ang+=s.w*dt;s.vx*=Math.exp(-2*dt);s.vy*=Math.exp(-2*dt);if(Math.abs(s.w)<.06){s.w=0;secure()}}
  else if(mag>.15&&G.fuel>0){const des=Math.atan2(jy,jx),err=wrap(des-s.ang);s.ang+=clamp(err,-SHIPDEF.turn*dt,SHIPDEF.turn*dt);if(Math.abs(err)<1)thr=mag*(1-Math.abs(err)*.7)}
  if(!stab&&IN.boost&&G.fuel>0)thr=1.7;
+ if(!stab)rcsStep(s,dt,acc);
  if(thr>0){s.vx+=Math.cos(s.ang)*acc*thr*dt;s.vy+=Math.sin(s.ang)*acc*thr*dt;G.fuel=Math.max(0,G.fuel-SHIPDEF.burn*thr*dt);if(G.job)G.job.localFuel+=SHIPDEF.burn*thr*dt;
   for(let i=0;i<2;i++){const b=s.ang+Math.PI+rnd(-.2,.2),side=(i?1:-1)*1.25,bx=s.x-Math.cos(s.ang)*7.5+Math.cos(s.ang+Math.PI/2)*side,by=s.y-Math.sin(s.ang)*7.5+Math.sin(s.ang+Math.PI/2)*side;addP(bx,by,s.vx+Math.cos(b)*rnd(15,30),s.vy+Math.sin(b)*rnd(15,30),rnd(.15,.4),pick([PAL.w,PAL.a,PAL.o,PAL.e]))}}
  burnFx=thr;thrustSnd(thr>0);
@@ -1682,7 +1683,7 @@ function drawRacks(src){const c=$('racks');if(!c)return;const x=c.getContext('2d
   const n=G.dstock[cat];for(let j=0;j<cap;j++){const row=Math.floor(j/Math.ceil(cap/3)),col=j%Math.ceil(cap/3);const w=Math.max(2,Math.floor(54/Math.ceil(cap/3))-1);const X=bx+3+col*(w+1),Y=9+row*18;
    if(j<n){x.fillStyle=[PAL.t,PAL.u,PAL.p][i];x.fillRect(X,Y,w,12);x.fillStyle=PAL.k;x.fillRect(X,Y+5,w,1)}else{x.fillStyle='#1a1730';x.fillRect(X,Y+11,w,1)}}})}
 function renderPanel(){const p=$('pw');const t=panelTab;const tb=(k,n)=>`<button class="${t===k?'on':''}" onclick="panelTab='${k}';renderPanel()">${n}</button>`;
- let h=`<h2>KNIGHT DEPOT</h2><div class="tabs tw">${tb('contracts','JOBS')}${tb('fuel','FUEL')}${tb('shop','SHOP')}${tb('upg','UPGRADES')}${tb('mods','MODULES')}${tb('svc','SERVICE')}</div>`;refOn=false;h+=dishCard();
+ let h=`<h2>KNIGHT DEPOT</h2><div class="tabs tw">${tb('contracts','JOBS')}${tb('fuel','FUEL')}${tb('shop','SHOP')}${tb('upg','UPGRADES')}${tb('mods','MODULES')}${tb('svc','SERVICE')}</div>`;refOn=false;h+=dishCard();if(t==='svc')h+=shelfCard();
  if(G.stationFuel<800)h+=`<div class="c" style="border-color:${G.stationFuel<=0?'#d6454e':'#ffb43c'};color:${G.stationFuel<=0?'#d6454e':'#ffb43c'};font-size:11px">⚠ Depot reserve ${G.stationFuel.toFixed(0)} kg${G.stationFuel<=0?' — EMPTY':' — LOW'}</div>`;
  if(t==='contracts')h+=jobsHTML();
  else if(t==='fuel')h+=refuelHTML('depot');
@@ -1971,6 +1972,57 @@ function renderDish(now,rdt){const D=DSH;if(!D)return;D.t+=rdt;const g=dishGeo()
  const done=D.i/DISH_N;px(PAL.k,W/2-40,cy0+38,80,5);px(PAL.t,W/2-39,cy0+39,78*done,3)}
 function fcirc(x,y,r,c){r=Math.max(.5,r);for(let dy=-Math.floor(r);dy<=r;dy++){const w=Math.sqrt(Math.max(0,r*r-dy*dy));px(c,Math.round(x-w),Math.round(y+dy),Math.max(1,Math.round(w*2)),1)}}
 
+// ================= v9 QUICK WINS: RCS strafe · pet Azure · Azure's finds shelf =================
+// ---- RCS strafe: screen-relative translate, no rotation (fly-by-wire maps the pad onto the 16 quad thrusters)
+const RCS={a:.32,burn:.3};// accel as a fraction of main thrust, fuel as a fraction of main burn
+(function(){const st=document.createElement('style');st.textContent=`#rcs{position:absolute;left:8px;bottom:calc(172px + env(safe-area-inset-bottom));display:grid;grid-template-columns:30px 30px 30px;grid-template-rows:30px 30px 30px;gap:2px;pointer-events:auto}
+#rcs button{padding:0;font-size:12px;width:30px;height:30px;line-height:1;touch-action:none;background:#1a1730}#rcs button.on{background:#43d1c4;color:#000}
+#rcs span{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--dim);letter-spacing:.05em}
+#azc{pointer-events:auto;cursor:pointer;touch-action:manipulation}`;document.head.appendChild(st);
+ const d=document.createElement('div');d.id='rcs';d.innerHTML='<span>RCS</span>';
+ [['u','▲',2,1],['l','◀',1,2],['r','▶',3,2],['d','▼',2,3]].forEach(([k,t,c,r])=>{const b=document.createElement('button');b.textContent=t;b.style.gridColumn=c;b.style.gridRow=r;b.dataset.k=k;
+  const on=e=>{e.preventDefault();IN['rcs_'+k]=true;b.classList.add('on');buzz(6)},off=()=>{IN['rcs_'+k]=false;b.classList.remove('on')};
+  b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);d.appendChild(b)});
+ $('ctrl').appendChild(d)})();
+let rcsT=0;
+function rcsStep(s,dt,acc){const K=IN.keys;
+ const rx=((IN.rcs_r||K.l)?1:0)-((IN.rcs_l||K.j)?1:0),ry=((IN.rcs_u||K.i)?1:0)-((IN.rcs_d||K.k)?1:0);if(!(rx||ry)||G.fuel<=0)return;
+ const m=Math.hypot(rx,ry),ux=rx/m,uy=ry/m,a=acc*RCS.a;s.vx+=ux*a*dt;s.vy+=uy*a*dt;
+ const v=Math.hypot(s.vx,s.vy);if(v>SHIPDEF.vmax){s.vx*=SHIPDEF.vmax/v;s.vy*=SHIPDEF.vmax/v}
+ G.fuel=Math.max(0,G.fuel-SHIPDEF.burn*RCS.burn*dt);if(G.job)G.job.localFuel+=SHIPDEF.burn*RCS.burn*dt;
+ // jets fire opposite the push, from the hull side facing it
+ if(Math.random()<.7){const jx=s.x-ux*3.5+rnd(-1.5,1.5),jy=s.y-uy*3.5+rnd(-1.5,1.5);addP(jx,jy,s.vx-ux*rnd(14,24)+rnd(-3,3),s.vy-uy*rnd(14,24)+rnd(-3,3),rnd(.12,.25),pick([PAL.w,'#dcd4f4']))}
+ rcsT-=dt;if(rcsT<=0){rcsT=.09;puff(.035,.06,2600+Math.random()*800)}}
+
+// ---- Pet Azure: tap his portrait
+let azPetT=0,azHearts=[],azPetN=0,azPetLast=0;
+const AZ_PET=['*happy chirp*','Hehe. Right behind the cere, boss.','*fluffs up*','*leans into it*','Okay, you can keep going.','*grinds beak contentedly*','Best pilot. Best scratches.','*eyes half closed*','Chirrrp~','*nibbles your finger*'];
+$('azc').addEventListener('pointerdown',e=>{e.stopPropagation();const now=performance.now();if(now-azPetLast>4000)azPetN=0;azPetN++;azPetLast=now;azPetT=now+900;
+ G.stats.pets=(G.stats.pets||0)+1;azFlap=now+500;if(azHearts.length<3)azHearts.push({x:3+Math.random()*9,y:4,t:now,vx:rnd(-.6,.6)});
+ tone(2400+Math.random()*900,.05,'sine',.05,600);tone(3100+Math.random()*500,.04,'sine',.04,-400,.06);buzz(8);
+ if(azPetN===8){azCD=0;say('Okay okay OKAY! I\'m fluffed! Fly the ship!')}else if(azPetN%3===1){azCD=0;say(pick(AZ_PET))}
+ if(G.stats.pets===50)say('Fifty scratches. You\'re officially my favourite human.');save()});
+const _drawAz=drawAz;drawAz=function(now){_drawAz(now);
+ azHearts=azHearts.filter(h=>now-h.t<900);for(const h of azHearts){const k=(now-h.t)/900,x=Math.round(h.x+h.vx*k*8),y=Math.round(h.y-k*4);azx.globalAlpha=1-k;azx.fillStyle='#ff5a8a';azx.fillRect(x,y,1,1);azx.fillRect(x+2,y,1,1);azx.fillRect(x,y+1,3,1);azx.fillRect(x+1,y+2,1,1);azx.globalAlpha=1}};
+
+// ---- Azure's finds: trinkets turn up on jobs and go on a shelf at the depot
+const TRINKETS=[
+ {id:'screw',n:'Golden screw',d:'Gold-plated. Someone REALLY cared about this satellite.'},
+ {id:'patch',n:'Mission patch',d:'A faded embroidered patch from a mission nobody remembers.'},
+ {id:'photo',n:'Old photo',d:'A family at a beach, taped inside an access panel.'},
+ {id:'pen',n:'Floating pen',d:'Writes upside down. Azure tried to eat it.'},
+ {id:'seed',n:'Space seed',d:'A sunflower seed. In orbit. How?!'},
+ {id:'key',n:'Tiny key',d:'Opens nothing. Azure insists it\'s important.'},
+ {id:'bolt',n:'Shiny bolt',d:'Polished to a mirror. Azure admires himself in it.'},
+ {id:'note',n:'Engineer\'s note',d:'"If you\'re reading this, the gyro is NOT my fault."'},
+ {id:'feather',n:'Blue feather',d:'…Wait, this one\'s Azure\'s.'},
+ {id:'coin',n:'Lucky coin',d:'Taped to a reaction wheel. It worked, apparently.'},
+ {id:'chip',n:'Vintage chip',d:'A processor older than Knight Field.'},
+ {id:'duck',n:'Rubber duck',d:'Debugging companion of some long-gone engineer.'}];
+function trinketRoll(){G.trinkets=G.trinkets||[];const left=TRINKETS.filter(t=>!G.trinkets.includes(t.id));if(!left.length||Math.random()>.35)return null;const t=pick(left);G.trinkets.push(t.id);return t}
+const _completeJob=completeJob;completeJob=function(c,lines,base,extra){const t=trinketRoll();if(t){lines=(lines||[]).concat([`<span class="y">Azure found: ${t.n}!</span>`]);setTimeout(()=>{azCD=0;azExcite();say(`Look what I found! A ${t.n.toLowerCase()}. It's going on the shelf.`)},900)}return _completeJob(c,lines,base,extra)};
+function shelfCard(){const got=G.trinkets||[];if(!got.length)return'';return`<div class="c"><h3>AZURE'S SHELF · ${got.length}/${TRINKETS.length}</h3>`+TRINKETS.map(t=>got.includes(t.id)?`<button style="margin:2px;font-size:11px" onclick="say('${t.d.replace(/'/g,"\\'")}')">${t.n}</button>`:`<button style="margin:2px;font-size:11px;opacity:.35" disabled>???</button>`).join('')+'</div>'}
+
 // ================= BOOT =================
 addEventListener('resize',resize);resize();
 try{if(!load()||!G||G.v!==2)newGame();
@@ -1987,7 +2039,7 @@ if(!G.contract&&!G.offers.length)genOffers();
 $('go').onclick=()=>{audioInit();$('tap').style.display='none';if(G.loc==='ground'){openGround();say('Back at Knight Field. Smells like jet fuel. Chirp!')}else if(G.docked){openStation('contracts');say(G.done?'Welcome back, boss! Pick a job.':'Hi! I\'m Azure, your copilot. Pick a contract — chirp!')}};
 requestAnimationFrame(frame);
 window.LL={get G(){return G},acceptContract,askTrip,startTrip,openEng,closeEng,release,get E(){return E},L3,LO,targets,trayTiles,beginBurns,finishBurn,action,doAction,objective,anchor,focusPoint,get view(){return view},
- askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
+ askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
 </script>
 <script>
 (function(){const K=['lastlight_v2','lastlight_opts'],$i=id=>document.getElementById(id);
