@@ -1999,6 +1999,7 @@ $i('llFile').onchange=()=>{const f=$i('llFile').files[0];if(!f)return;f.text().t
  if(!d||d.app!=='lastlight'||!d.data||!d.data.lastlight_v2){alert('That file is not a LAST LIGHT save.');return}
  if(localStorage.getItem('lastlight_v2')&&!confirm('Replace the save on this device?'))return;
  Object.entries(d.data).forEach(([k,v])=>{if(K.includes(k))localStorage.setItem(k,v)});location.reload()})};
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{scope:'./'}).catch(()=>{}));
 })();
 </script>
