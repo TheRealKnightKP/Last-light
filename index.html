@@ -294,7 +294,7 @@ const anchor=()=>objById(G.loc)||VOID;
 const tgtObj=()=>G.contract?objById(G.contract.target):null;
 const tplOf=c=>TEMPL.find(t=>t.id===c.tid);
 function dockPose(){const s=G.ship;s.x=PORT.x;s.y=PORT.y-SHIPDEF.nose;s.vx=s.vy=0;s.ang=Math.PI/2;s.w=0}
-const shipMass=()=>SHIPDEF.dry+G.fuel+(G.carry?900:0)+G.cargo.reduce((a,c)=>a+c.mass,0)+(G.held?(objById(G.held.id)||{mass:0}).mass:0);
+const shipMass=()=>SHIPDEF.dry+lockerMass()+G.fuel+(G.carry?900:0)+G.cargo.reduce((a,c)=>a+c.mass,0)+(G.held?(objById(G.held.id)||{mass:0}).mass:0);
 const tripFuel=dv=>{const m=shipMass();return m*(1-Math.exp(-dv/(SHIPDEF.isp*G0)))};
 
 // ================= CONTRACTS =================
@@ -526,10 +526,10 @@ function frame(ts){const now=ts,rdt=Math.min(.05,(ts-last)/1000||0);last=ts;
  if(G){const modalOpen=$('modal').classList.contains('show');
   if(!paused&&!modalOpen){
    if(G.anim&&G.anim.type==='trip')tripTick(rdt);else if(G.anim&&G.anim.type==='dock')dockTick(rdt);else if(G.anim&&G.anim.type==='attach')attachTick(rdt);
-   else if(!engOpen&&!mxOpen&&!dishOpen){G.t+=rdt;if(G.earth)earthStep(rdt);else if(G.loc==='ground')groundStep(rdt);else if(G.burn)burnStep(rdt);else arenaStep(rdt);azTick(rdt);if(G.contract&&G.t>G.contract.deadline)endContract(false,'<h2>CONTRACT EXPIRED</h2><div class="c">The client cancelled. −10% penalty.</div><button onclick="closeModal()">OK</button>')}
+   else if(!engOpen&&!mxOpen&&!dishOpen&&!benchOpen&&!lockerOpen){G.t+=rdt;if(G.earth)earthStep(rdt);else if(G.loc==='ground')groundStep(rdt);else if(G.burn)burnStep(rdt);else arenaStep(rdt);azTick(rdt);if(G.contract&&G.t>G.contract.deadline)endContract(false,'<h2>CONTRACT EXPIRED</h2><div class="c">The client cancelled. −10% penalty.</div><button onclick="closeModal()">OK</button>')}
    for(const p of parts){p.x+=p.vx*rdt;p.y+=p.vy*rdt;p.life-=rdt}parts=parts.filter(p=>p.life>0)}
   else thrustSnd(false);
-  if(dishOpen)renderDish(now,rdt);else if(mxOpen)renderMx(now,rdt);else if(engOpen)renderEng(now,rdt);else if(G.earth)renderEarth(now,rdt);else if(G.loc==='ground')renderGround(now,rdt);else if(view==='map')renderMap(now);else renderArena(now,rdt);
+  if(benchOpen)renderBench(now,rdt);else if(lockerOpen)renderLocker(now,rdt);else if(dishOpen)renderDish(now,rdt);else if(mxOpen)renderMx(now,rdt);else if(engOpen)renderEng(now,rdt);else if(G.earth)renderEarth(now,rdt);else if(G.loc==='ground')renderGround(now,rdt);else if(view==='map')renderMap(now);else renderArena(now,rdt);
   hud(now);drawAz(now);refuelTick(rdt,now);
   if(now-saveT>4000&&!G.anim&&!G.earth){saveT=now;save()}}
  requestAnimationFrame(frame)}
@@ -665,7 +665,7 @@ function targets(){const b=bus(),T=[];if(!b)return T;const R=6;
  return T}
 function hitT(X,Y){let best=null,bs=1e9;for(const t of targets()){let ok,d;if(t.p){d=Math.hypot(X-t.p[0],Y-t.p[1]);ok=d<t.r+3}else{ok=X>t.rect.x&&X<t.rect.x+t.rect.w&&Y>t.rect.y&&Y<t.rect.y+t.rect.h;d=50}if(!ok)continue;const sc=d+(t.tools.includes(tool)?0:100)+(t.k==='body'?60:0);if(sc<bs){bs=sc;best=t}}return best}
 function trayItems(){const b=bus(),it=[];it.push({type:'m5',src:'screw',n:b.cup.m5+(G.inv.m5||0),loose:b.cup.m5});it.push({type:'m3',src:'screw',n:b.cup.m3+(G.inv.m3||0),loose:b.cup.m3});
- const rel=new Set();if(b.view==='in'){for(const p of Object.values(b.parts))rel.add(p.type);rel.add('fuse')}else{rel.add('cell');if(b.ext.foil)rel.add('patch')}for(const k of rel)if(G.inv[k]>0)it.push({type:k,src:'kit',n:G.inv[k]});
+ const rel=new Set();if(b.view==='in'){for(const p of Object.values(b.parts))rel.add(p.type);rel.add('fuse')}else{rel.add('cell');if(b.ext.foil)rel.add('patch')}const lki=k=>{const i=G.locker?G.locker.indexOf(k):-1;return i<0?999:i};for(const k of [...rel].sort((a,b)=>lki(a)-lki(b)))if(G.inv[k]>0)it.push({type:k,src:'kit',n:G.inv[k]});
  b.tray.forEach((t,j)=>it.push({type:t.type,src:'tray',j,dead:t.dead,n:1,heal:t.heal}));it.push({type:'order',src:'order',n:0});return it}
 function trayTiles(){const L=L3(),t=L.tray,tw=22,per=Math.max(1,Math.floor((t.w-4)/tw));return trayItems().map((it,i)=>Object.assign(it,{idx:i,x:t.x+2+(i%per)*tw,y:t.y+2+Math.floor(i/per)*27,w:tw-2,h:25}))}
 function trayHit(X,Y){for(const it of trayTiles())if(X>=it.x&&X<it.x+it.w&&Y>=it.y&&Y<it.y+it.h)return it;return null}
@@ -770,7 +770,7 @@ const eUp=e=>{if(!engOpen||!E)return;const[X,Y]=ep(e),b=bus();E.down=false;E.hol
    if(it.src==='kit'&&b.tray.some(x=>x.type==='fuse'&&x.heal)&&!b.tray.some(x=>x.type==='fuse'&&x.dead))penal(PEN.fuse,'wasted fuse');takeTray(it);b.fuses[f]=it.dead?'blown':'ok';SFX.clunk();floatE('FUSE IN',PAL.t);elog(`${f} seated.`);return}}return}
  if(['patch','cell'].includes(it.type)){elog('That one goes on the OUTSIDE.','y');return}
  for(const k in b.parts){const r=L.slot(k),P=b.parts[k];if(X>r.x&&X<r.x+r.w&&Y>r.y&&Y<r.y+r.h){if(P.present){elog('Slot occupied.','y');return}if(it.type!==P.type){SFX.bad();elog(`Won't fit — that slot takes a ${pname(P.type)}.`,'r');return}
-  if(it.src==='kit'&&b.tray.some(x=>x.type===it.type&&x.heal))penal(PEN.spare,'healthy part swapped');
+  if(it.src==='kit'&&b.tray.some(x=>x.type===it.type&&x.heal&&!x.benched))penal(PEN.spare,'healthy part swapped');
   takeTray(it);P.present=true;P.dead=!!it.dead;P.scr=[0,0];P.plug=false;P.loose=false;SFX.clunk();floatE('SEATED',PAL.t);elog(`${it.src==='kit'?'New':'Old'} ${pname(P.type)} seated. Screw it down and plug it in.`,'g');return}}};
 function takeTray(it){const b=bus();if(it.src==='kit')G.inv[it.type]--;else if(it.src==='tray')b.tray.splice(it.j,1)}
 cv.addEventListener('pointerup',eUp);cv.addEventListener('pointercancel',eUp);
@@ -1165,7 +1165,7 @@ function action(){const a=anchor(),c=G.contract,t=tgtObj(),tp=c&&tplOf(c);
  if(tp.type==='collect')return{l:`COLLECT\n${a.deb.filter(d=>d.obj).length} LEFT`,ok:false};
  return{l:'TOUCH\nTO GRAB',ok:false}}
 function doAction(){if(engOpen)return;const A=action();if(A.ok&&A.f)A.f();else SFX.bad()}
-function objective(){if(typeof dishOpen!=='undefined'&&dishOpen)return`<b>${G.loc==='ground'?'CANTEEN':'GALLEY'} DISH DUTY</b> · Rub the gunk off each plate, then drag it to the <b>RACK</b>. ${DISH_N} plates = ${DISH_PAY} CR.`;if(typeof mxOpen!=='undefined'&&mxOpen)return`<b>EX-3 HANGAR</b> · ${exIssues().length?'Find what PANTS flagged, fix it, then run the <b>SYSTEMS CHECK</b>.':'All green. Run the <b>SYSTEMS CHECK</b> to sign her off.'}`;if(engOpen)return engHint();if(G.earth)return earthObjective();const s=G.ship,a=anchor(),c=G.contract,tp=c&&tplOf(c);
+function objective(){if(typeof benchOpen!=='undefined'&&benchOpen&&BN){const s=BN.steps[BN.i];return BN.fin?`<b>BENCH</b> · ${itemName(BN.type)} refurbished! Tap <b>DONE</b>.`:`<b>BENCH · ${itemName(BN.type).toUpperCase()}</b> · step ${BN.i+1}/${BN.steps.length} · ${stepTxt(s)}`}if(typeof lockerOpen!=='undefined'&&lockerOpen)return`<b>LOCKER</b> · ${Math.round(lockerMass())}/${lockerCap()} kg. Everything in here adds to the Ex-3's mass.`;if(typeof dishOpen!=='undefined'&&dishOpen)return`<b>${G.loc==='ground'?'CANTEEN':'GALLEY'} DISH DUTY</b> · Rub the gunk off each plate, then drag it to the <b>RACK</b>. ${DISH_N} plates = ${DISH_PAY} CR.`;if(typeof mxOpen!=='undefined'&&mxOpen)return`<b>EX-3 HANGAR</b> · ${exIssues().length?'Find what PANTS flagged, fix it, then run the <b>SYSTEMS CHECK</b>.':'All green. Run the <b>SYSTEMS CHECK</b> to sign her off.'}`;if(engOpen)return engHint();if(G.earth)return earthObjective();const s=G.ship,a=anchor(),c=G.contract,tp=c&&tplOf(c);
  if(G.loc==='ground')return'<b>KNIGHT FIELD</b> · Refuel, repair, shop and load cargo, then <b>LAUNCH</b> back to orbit.';
  if(G.anim&&G.anim.type==='trip'){const A=G.anim;return`<b>ORBITAL TRANSFER</b> · T+${fmtT(A.time*A.p)} of ${fmtT(A.time)}<br><span style="color:#7a7398">Hohmann + phasing + plane change. Watch the map!</span>`}
  if(G.anim&&G.anim.type==='attach')return'<b>ATTACHING…</b> clamps engaging, bolts driving.';
@@ -1626,7 +1626,7 @@ function meco(E2,O){engSnd(0);thrustSnd(false);windSnd(0);SFX.clamp();buzz([30,3
  say(`MECO! EX-3 engines off. Coasting to apogee ${O.apo.toFixed(0)} km — circularize: <b>PROGRADE</b> ${dvc.toFixed(0)} m/s.`)}
 function openGround(tab){if(tab)panelTab=tab;else if(!['g_svc','g_rep','g_shop','g_cargo','g_jobs','g_launch'].includes(panelTab))panelTab='g_svc';$('panel').classList.add('show','sheet');renderGroundPanel()}
 function renderGroundPanel(){const p=$('pw'),t=panelTab;const tb=(k,n)=>`<button class="${t===k?'on':''}" onclick="panelTab='${k}';renderGroundPanel()">${n}</button>`;
- let h=`<h2>KNIGHT FIELD</h2><div class="tabs tw">${tb('g_svc','FUEL')}${tb('g_rep','REPAIR')}${tb('g_shop','SHOP')}${tb('g_cargo','CARGO')}${tb('g_jobs','JOBS')}${tb('g_launch','LAUNCH')}</div>`;refOn=false;h+=dishCard();
+ let h=`<h2>KNIGHT FIELD</h2><div class="tabs tw">${tb('g_svc','FUEL')}${tb('g_rep','REPAIR')}${tb('g_shop','SHOP')}${tb('g_cargo','CARGO')}${tb('g_jobs','JOBS')}${tb('g_launch','LAUNCH')}</div>`;refOn=false;h+=dishCard();if(t==='g_rep')h+=`<div class="c"><h3>LOCKER</h3>${lockerSummary()}<br><button onclick="openLocker('ground')">OPEN LOCKER</button></div>`;
  if(t==='g_svc')h+=refuelHTML('ground');
  else if(t==='g_rep'){const rc=Math.ceil((SHIPDEF.hullMax-G.hull)*8);h+=`<div class="c"><h3>GROUND CREW</h3>Hull ${G.hull.toFixed(0)}/${SHIPDEF.hullMax}. Ground rate: 8 CR per point.<br><button ${G.hull>=SHIPDEF.hullMax||G.credits<rc?'disabled':''} onclick="groundRepair(${rc})">REPAIR (${rc} CR)</button></div>
   <div class="c"><h3>EX-3 HANGAR</h3>Wear <b>${Math.round((G.wear||0)*100)}%</b>${G.wear>.35?' — performance reduced':''} · PANTS: ${exIssues().length?'<span style="color:#ffb43c">'+exIssues().length+' open</span>':'<span style="color:#43d1c4">all green</span>'}<br><span class="m">TPS panels, thruster bays, legs, wing hinges, RCS. No deadline, no penalties.</span><br><button onclick="openMaint()">OPEN THE HANGAR</button></div>`}
@@ -1648,7 +1648,7 @@ function loadCargo(k){const c=G.contract,tp=c&&tplOf(c);let it=null;
  G.cargo.push(it);G.cargoSecure=false;G.gsvc=G.gsvc||{};G.gsvc.cargo=2.5;SFX.servo();setTimeout(SFX.thunk,900);save();renderGroundPanel();say('Loaded! Latch the cargo before launch.')}
 function secureCargo(){G.cargoSecure=true;G.gsvc=G.gsvc||{};G.gsvc.secure=2;SFX.latch();setTimeout(SFX.thunk,200);buzz(30);save();renderGroundPanel()}
 // ---------- Azure talks differently on Earth than in orbit ----------
-function azWhere(){if(typeof dishOpen!=='undefined'&&dishOpen)return'dish';if(G&&G.earth)return G.earth.ph==='ascent'?'up':'air';return G&&G.loc==='ground'?'ground':'space'}
+function azWhere(){if(typeof benchOpen!=='undefined'&&benchOpen)return'bench';if(typeof dishOpen!=='undefined'&&dishOpen)return'dish';if(G&&G.earth)return G.earth.ph==='ascent'?'up':'air';return G&&G.loc==='ground'?'ground':'space'}
 const AZE={
  ground:{idle:['Gravity again. My wings have to WORK down here.','*sunbathes on the hangar beam*','Smells like jet fuel and rain.','The ground crew keeps calling me "the bird". I have a NAME.','Do you think the Pauldron misses us?','*pecks at a loose rivet on the floor*','Real air! I can actually fly in circles!','There\'s a pigeon outside. He\'s so… basic.','*drinks from the mop bucket* …don\'t tell anyone.','Knight Field at sunset is my favourite.','The pad is still warm from our engines.','I could live in this hangar. So many perches.','Somebody left sunflower seeds in the break room. Not anymore.','Wind\'s picking up. Good day to fly. Me, not the Ex-3.','*hops along the wing like it\'s a runway*'],
   found:['Ooh, look at that!','PANTS was right, that\'s bad.','Found it! *taps it with my beak*'],fixed:['Fixed! The ground crew can\'t say anything now.','Good as new. Almost.','*approving chirp*'],sloppy:['The check failed… let\'s look again.','PANTS isn\'t happy yet.'],
@@ -1696,7 +1696,7 @@ function renderPanel(){const p=$('pw');const t=panelTab;const tb=(k,n)=>`<button
  else{const rc=Math.ceil((SHIPDEF.hullMax-G.hull)*(has('workshop')?6:12));
   h+=`<div class="c"><h3>HULL REPAIR</h3>Hull ${G.hull.toFixed(0)}/${SHIPDEF.hullMax}. ${has('workshop')?6:12} CR per point.<br><button ${G.hull>=SHIPDEF.hullMax||G.credits<rc?'disabled':''} onclick="G.credits-=${rc};G.hull=SHIPDEF.hullMax;SFX.ok();buzz(30);save();renderPanel()">REPAIR (${rc} CR)</button></div>
   <div class="c"><h3>EX-3 HANGAR</h3>Ex-3 wear <b>${Math.round((G.wear||0)*100)}%</b> · PANTS ${exIssues().length?exIssues().length+' open':'green'}${G.wear>.35?' — <span style="color:#ffb43c">performance reduced</span>':''}<br>${has('hangar')?'<button onclick="openMaint()">OPEN THE EX-3</button>':'<span class="m">Needs the HANGAR module (or land at Knight Field).</span>'}</div>
-  <div class="c"><h3>SHIP INVENTORY</h3>${Object.entries(G.inv).filter(e=>e[1]).map(e=>`${e[0]==='m3'?'M3 screws':e[0]==='m5'?'M5 screws':pname(e[0])} ×${e[1]}`).join(' · ')||'Empty'}</div>
+  <div class="c"><h3>SHIP INVENTORY</h3>${lockerSummary()}<br><button onclick="openLocker('station')">OPEN LOCKER</button></div>
   <div class="c"><h3>CARGO</h3>${G.cargo.length?G.cargo.map(c=>c.name+' '+c.mass+'kg').join('<br>'):'Empty'}</div>
   <div class="c"><h3>EARTH</h3>Knight Field: cheap fuel, full warehouse, ground crew.<br><button onclick="askLand()">LAND AT KNIGHT FIELD</button></div>`}
  h+=`<button style="width:100%;margin-top:4px;padding:10px" onclick="closePanel()">CLOSE</button>`+(G.contract&&tgtObj()?`<button class="hot" style="width:100%;margin-top:6px;padding:12px" onclick="closePanel();askTrip('${G.contract.target}')">LAUNCH TO TARGET</button>`:'');
@@ -1785,7 +1785,7 @@ function openMx(){if(G.loc!=='ground'&&!has('hangar'))return;ex3();mxInv();close
 function closeMx(){mxOpen=false;MX=null;$('mx').classList.remove('show');$('ctrl').style.display='';$('info').style.display='';if(G.loc==='ground')openGround('g_rep');else openStation('svc')}
 // ---------- input ----------
 cv.addEventListener('pointerdown',e=>{if(!mxOpen||!MX||MX.chk)return;try{cv.setPointerCapture(e.pointerId)}catch(_){}const[X,Y]=ep(e);MX.down=[X,Y];MX.cur=[X,Y];
- const tile=mxTray().find(t=>X>t.x&&X<t.x+t.w&&Y>t.y&&Y<t.y+t.h);if(tile){if(tile.k==='old'){mxLog('Old parts go back to the depot for recycling.');return}if(MX.tool!=='gripper'){MX.tool='gripper';mxToolUI()}if((G.inv[tile.k]||0)<=0){mxLog(`No ${EXPN[tile.k]} in stock — tap <b>ORDER</b>.`,'y');SFX.bad();return}MX.drag={spare:tile.k,x:X,y:Y};SFX.tick();return}
+ const tile=mxTray().find(t=>X>t.x&&X<t.x+t.w&&Y>t.y&&Y<t.y+t.h);if(tile){if(tile.k==='old'){mxLog('Old parts go in the locker. Refurbish them on the BENCH (INV).');return}if(MX.tool!=='gripper'){MX.tool='gripper';mxToolUI()}if((G.inv[tile.k]||0)<=0){mxLog(`No ${EXPN[tile.k]} in stock — tap <b>ORDER</b>.`,'y');SFX.bad();return}MX.drag={spare:tile.k,x:X,y:Y};SFX.tick();return}
  const t=mxHit(X,Y);const tool=MX.tool;
  if(tool==='scan'){MX.hold={k:'scan'};mxScanAt(X,Y);return}
  if(!t){return}
@@ -1858,8 +1858,8 @@ function mxBuy(k,pr){if(G.credits<pr)return;G.credits-=pr;G.inv[k]=(G.inv[k]||0)
 function mxCheck(){if(MX.chk||MX.anim)return;MX.chk={t:0};SFX.servo();mxLog('Systems check: PANTS sweep, doors, swivels, legs, wings, RCS…','y')}
 function mxCheckEnd(){const L=exIssues();MX.chk=null;
  if(L.length){SFX.bad();mxLog('<span class="r">CHECK FAILED:</span> '+L.slice(0,2).join(' · ')+(L.length>2?` (+${L.length-2} more)`:''));azR('sloppy');return}
- G.wear=0;applyUpgrades();const old=MX.bolts.filter(b=>b.old).length;save();SFX.cash();buzz([30,40,60]);azCD=0;azExcite();
- modal(`<h2>EX-3 SIGNED OFF</h2><div class="c">All systems green. Wear reset to 0%.${old?`<br><span class="m">${old} old part${old>1?'s':''} sent for recycling.</span>`:''}</div><button class="hot" onclick="closeModal();closeMx()">BACK</button>`)}
+ G.wear=0;applyUpgrades();const old=MX.bolts.filter(b=>b.old&&b.k!=='tag').length;G.broken=G.broken||{};MX.bolts.forEach(b=>{if(b.old&&b.k!=='tag')G.broken[b.k]=(G.broken[b.k]||0)+1});save();SFX.cash();buzz([30,40,60]);azCD=0;azExcite();
+ modal(`<h2>EX-3 SIGNED OFF</h2><div class="c">All systems green. Wear reset to 0%.${old?`<br><span class="m">${old} old part${old>1?'s':''} went in the locker — refurbish ${old>1?'them':'it'} on the BENCH.</span>`:''}</div><button class="hot" onclick="closeModal();closeMx()">BACK</button>`)}
 function renderMx(now,rdt){mxTick(rdt);const g=mxGeo(),S=g.S;
  // hangar interior: walls, girders, lights, floor stripes, work stands
  cx.fillStyle='#120f22';cx.fillRect(0,0,W,H);for(let x=-((now/90)%0);x<W;x+=22){px('#1a1730',x,0,10,g.floor);px('#221e3a',x+1,0,2,g.floor)}
@@ -2042,6 +2042,348 @@ function burnEarth(){const B=G.burn;if(!B)return;const na=burnTh(B)+Math.PI,ux=M
  for(let i=0;i<10;i++){const a=na+Math.PI+(hash(i)-.5)*.5,r=Rp-4-hash(i+3)*M*.12,qx=ex+Math.cos(a)*r,qy=ey-Math.sin(a)*r;px('#c8d4ee',qx,qy,4,2)}
  const lx=W/2+ux*L*.78,ly=H/2+uy*L*.78;ptext(cx,'EARTH',lx,ly,'#6fb0ff',1)}
 
+// ================= v10 REPAIR BENCH (close-up ASMR refurbishing) + LOCKER (inventory) =================
+let benchOpen=false,BN=null,lockerOpen=false,LK=null;
+// masses (kg) — the locker rides in the Ex-3, so everything in it counts toward ship mass
+const BMASS={battery:22,wheel:11,computer:6,antenna:3,solar:30,sensor:4,tank:40,valve:2,fuse:.1,patch:.5,cell:1.5,m3:.005,m5:.01,tpsp:6,tag:.1,strut:35,dact:8,swu:12,rcsv:3};
+const BENCHABLE={battery:1,wheel:1,computer:1,sensor:1,cell:1,antenna:1,solar:1,tank:1,valve:1,strut:1,dact:1,swu:1,rcsv:1,tpsp:1};
+const itemName=k=>k==='m3'?'M3 screws':k==='m5'?'M5 screws':pname(k);
+function lockerCap(){return 300+(has('storage')?300:0)}
+function lockerMass(){if(typeof G==='undefined'||!G||!G.inv)return 0;let m=0;for(const k in G.inv)m+=(G.inv[k]||0)*(BMASS[k]??1);if(G.broken)for(const k in G.broken)m+=(G.broken[k]||0)*(BMASS[k]??1);return m}
+function lockerFits(k,n){return lockerMass()+(BMASS[k]??1)*n<=lockerCap()+1e-6}
+function lockerFull(){SFX.bad();azCD=0;say(`Locker's full — ${Math.round(lockerMass())}/${lockerCap()} kg. Toss or refurbish something first (tap <b>INV</b>).`)}
+const _droneBuy=droneBuy;droneBuy=function(k,pr,pack){if(!lockerFits(k,pack)){closeModal();lockerFull();return}return _droneBuy(k,pr,pack)};
+const _buyPart=buyPart;buyPart=function(k,src){const pack=k==='m3'||k==='m5'?4:1;if(!lockerFits(k,pack)){lockerFull();return}return _buyPart(k,src)};
+const _mxBuy=mxBuy;mxBuy=function(k,pr){if(!lockerFits(k,1)){closeModal();lockerFull();return}return _mxBuy(k,pr)};
+// dead parts you pull out of satellites are kept (as junk) instead of vanishing
+const _returnTray=returnTray;returnTray=function(b){G.broken=G.broken||{};for(const t of b.tray)if(t.dead&&BENCHABLE[t.type])G.broken[t.type]=(G.broken[t.type]||0)+1;_returnTray(b);b.tray=b.tray.filter(t=>!t.dead)};
+
+for(const[k,v]of Object.entries({'★':'010111111111101','☆':'010101101101111','✓':'000001001101010'}))FONT[k]=v;
+const BIMG={};const bIcon=k=>BIMG[k]||(BIMG[k]=spr(BICON[k]));
+// ---------- sounds: short one-shots + a few continuous loops ----------
+const BS={swish:v=>puff(.015+.05*Math.min(1,v),.07,600+Math.random()*600),crinkle:()=>{puff(.03+Math.random()*.04,.02,4500+Math.random()*3500);if(Math.random()<.5)tone(6000+Math.random()*3000,.008,'square',.01)},
+ tick:()=>tone(1500+Math.random()*300,.018,'square',.022),clink:()=>{tone(3300,.09,'sine',.04,-300);tone(5200,.05,'sine',.025,0,.02)},clack:()=>{tone(170,.07,'square',.06,-70);puff(.08,.05,1400)},
+ pop:()=>{tone(620,.05,'sine',.06,-380);puff(.05,.03,2500)},click:()=>{tone(2600,.015,'square',.05);tone(1100,.03,'triangle',.05,0,.012)},thunk:()=>{tone(95,.18,'triangle',.22,-45);puff(.1,.08,500)},
+ squish:()=>{tone(150+Math.random()*40,.06,'sine',.035,-50);puff(.025,.06,350)},rivet:()=>{puff(.18,.04,2200);tone(140,.12,'triangle',.14,-60,.02)},beepG:()=>tone(1320,.07,'sine',.04),beepR:()=>{tone(330,.14,'sine',.05);tone(330,.14,'sine',.05,0,.18)},
+ torque:()=>{tone(3200,.012,'square',.09);tone(1600,.03,'square',.05,0,.014)},step:()=>{tone(880,.06,'sine',.03);tone(1320,.09,'sine',.03,0,.07)},tinkle:()=>{for(let i=0;i<4;i++)tone(3000+Math.random()*2500,.08,'sine',.025,0,i*.05)},
+ chime:()=>{[784,988,1175,1568].forEach((f,i)=>{tone(f,1.2,'sine',.035,0,i*.09);tone(f*2,.7,'sine',.008,0,i*.09)})},whoosh:()=>{puff(.12,.35,700);puff(.06,.3,1800)},stamp:()=>{tone(80,.22,'triangle',.25,-40);puff(.14,.1,600)}};
+const BLP={};
+function bLoop(id,on,c){if(!AC)return;let L=BLP[id];if(!L){if(!on)return;try{const s=AC.createBufferSource();s.buffer=noiseBuf;s.loop=true;const f=AC.createBiquadFilter();f.type=c.type||'bandpass';f.frequency.value=c.f;f.Q.value=c.q||1;const g=AC.createGain();g.gain.value=0;s.connect(f);f.connect(g);g.connect(AC.destination);s.start();
+  let o=null,og=null;if(c.osc){o=AC.createOscillator();o.type=c.osc;o.frequency.value=c.of;og=AC.createGain();og.gain.value=0;o.connect(og);og.connect(AC.destination);o.start()}L=BLP[id]={f,g,o,og}}catch(e){return}}
+ const t=AC.currentTime,son=on&&OPT.sound;L.g.gain.setTargetAtTime(son?(c.v||.05)*OPT.vol:0,t,.03);if(L.og)L.og.gain.setTargetAtTime(son?(c.ov||.02)*OPT.vol:0,t,.03);if(on){L.f.frequency.setTargetAtTime(c.f,t,.04);if(L.o&&c.of)L.o.frequency.setTargetAtTime(c.of,t,.04)}}
+function bLoopsOff(){for(const id in BLP)bLoop(id,false,{f:1000})}
+
+// ---------- recipes ----------
+const RECIPE={battery:['wipe','peel','unscrew','lid','probe','pull','insert','solder','lidclose','torque'],computer:['wipe','unscrew','lid','probe','solder','switch','reseat','lidclose','torque'],
+ wheel:['wipe','unscrew','lid','heat','grease','spin','lidclose','torque'],swu:['wipe','unscrew','lid','heat','grease','spin','lidclose','torque'],sensor:['wipe','unscrew','lid','heat','polish','seal','lidclose','torque'],
+ cell:['wipe','peel','heat','pull','insert','seal'],antenna:['wipe','unscrew','lid','weld','reseat','lidclose','torque'],valve:['wipe','unscrew','lid','grease','seal','lidclose','torque'],
+ rcsv:['wipe','unscrew','lid','reseat','seal','lidclose','torque'],dact:['wipe','unscrew','lid','solder','grease','lidclose','torque'],solar:['wipe','peel','weld','rivet','grease'],
+ tank:['wipe','weld','heat','seal','rivet'],strut:['wipe','weld','rivet','grease','seal'],tpsp:['wipe','heat','seal','heat2','rivet']};
+const SHAPE={cell:'plate',solar:'plate',tpsp:'plate',tank:'tube',strut:'tube'};
+const BCOL={battery:['#3a3a46','#4f4f60'],computer:['#1c1c26','#30303f'],wheel:['#6b6880','#8a87a0'],swu:['#5a5870','#77748e'],sensor:['#cfcadc','#f2f0e6'],antenna:['#8a87a0','#b4b2c6'],valve:['#7a6a4a','#9a8a62'],rcsv:['#6b6880','#8a87a0'],dact:['#4a5a3a','#5e7050'],cell:['#22306e','#2b4a96'],solar:['#22306e','#2b4a96'],tpsp:['#141218','#2a2632'],tank:['#a6a4b8','#d8d6e4'],strut:['#8a87a0','#c4c2d4']};
+const BLABEL={battery:'LI-ION 28V',computer:'FLT COMP',wheel:'RW-12',swu:'SWIVEL',sensor:'SENSOR',antenna:'ANT-3',valve:'ISO VLV',rcsv:'RCS VLV',dact:'DOOR ACT',tank:'N2H4',strut:'LEG STRUT'};
+const BTOOL={wipe:'rag',polish:'rag',peel:'hand',unscrew:'driver',lid:'hand',lidclose:'hand',probe:'meter',pull:'hand',insert:'hand',solder:'solder',switch:'hand',reseat:'hand',heat:'heat',heat2:'heat',grease:'grease',spin:'hand',weld:'welder',seal:'seal',rivet:'rivet',torque:'driver'};
+const BTOOLS=[['hand','HAND'],['rag','RAG'],['driver','DRIVER'],['meter','METER'],['solder','SOLDER'],['welder','WELDER'],['heat','HEAT GUN'],['seal','SEALANT'],['rivet','RIVETS'],['grease','GREASE']];
+const BICON={hand:['...kk.....','..kwwk.k..','..kwwkkwk.','.kkwwwwwwk','kwkwwwwwwk','kwwwwwwwwk','.kwwwwwwk.','..kwwwwk..','...kwwk...','...kkkk...'],
+ rag:['..........','.kkkkkkk..','kccccccck.','kcbcccbcck','kccccccccк','.kcccbccck','..kcccccck','...kkkkkk.','..........','..........'].map(r=>r.replace('к','k')),
+ driver:['........kk','.......kgk','......kgk.','.....kgk..','....kgk...','..kkgk....','.kaak.....','kaaak.....','kaak......','.kk.......'],
+ meter:['.kkkkkkk..','.kyyyyyk..','.ktttttk..','.ktkkktk..','.ktttttk..','.kyyyyyk..','.kykykyk..','.kyyyyyk..','.kkkkkkkr.','.......kr.'],
+ solder:['.........o','........kk','.......kg.','......kg..','.....kg...','...kkb....','..kbbk....','.kbbk.....','kbbk......','.kk.......'],
+ welder:['......y...','.....eyy..','.....kek..','....kSk...','...kSSk...','..kSSk....','.kSSk.....','kSSk......','kkk.......','..........'],
+ heat:['..........','.kkkkk.o..','krrrrrkgo.','krrrrrkgg.','krrrrrkgo.','.kkkrk.o..','...krk....','...krk....','...kkk....','..........'],
+ seal:['..........','kkkkkkk...','kwwwwwwkk.','kwwwwwwkgk','kwwwwwwkk.','kkkkkkk.cc','.......c..','..........','..........','..........'],
+ rivet:['..........','..kkkkk...','.kvvvvvkgg','.kvvvvvkg.','.kvvvvvkgg','..kvkkk...','..kvk.....','..kvk.....','..kkk.....','..........'],
+ grease:['..........','.kkkkkk...','kuuuuuukk.','kuuuuuukUk','kuuuuuukk.','.kkkkkk.uu','.......u..','......uu..','..........','..........']};
+function stepTxt(s){const T=BN.type,nm=itemName(T);switch(s.k){
+ case'wipe':return`It's filthy. Scrub the ${nm} clean with the <b>RAG</b>.`;case'polish':return`Polish the lens with the <b>RAG</b> until it's crystal clear.`;
+ case'peel':return`Peel the old tape — <b>HAND</b>, drag it from the tab.`;case'unscrew':return`Back out the 4 lid screws — hold the <b>DRIVER</b> on each.`;
+ case'lid':return`Lift the lid — <b>HAND</b>, drag it up and over.`;case'probe':return T==='battery'?`Probe each cell with the <b>METER</b>. Find the dead one.`:`Probe the test pads with the <b>METER</b>. Find the open trace.`;
+ case'pull':return T==='cell'?`Lift the cracked cover glass off — <b>HAND</b>, drag it to the <b>BIN</b>.`:`Pull the dead cell — <b>HAND</b>, drag it to the <b>BIN</b>.`;
+ case'insert':return T==='cell'?`Drag fresh cover glass from <b>STOCK</b> onto the cell.`:`Drag a fresh cell from <b>STOCK</b> into the empty slot.`;
+ case'solder':return T==='computer'?`Bridge the burnt gap — drag the <b>SOLDER</b> iron along it.`:T==='dact'?`Solder the motor leads — hold the <b>SOLDER</b> iron on each pad.`:`Solder both tabs — hold the <b>SOLDER</b> iron on each.`;
+ case'switch':return`Set the DIP switches to match the sticker — tap them with your <b>HAND</b>.`;
+ case'reseat':return s.sub===0?`Pop the connector out — tap it with your <b>HAND</b>.`:s.sub===1?`Crusty pins. Scrub them with the <b>RAG</b>.`:`Clean! Click the connector home — <b>HAND</b>.`;
+ case'heat':return T==='sensor'?`Bake the fog out of the lens — hold the <b>HEAT GUN</b> on it.`:T==='cell'?`Soften the old adhesive — hold the <b>HEAT GUN</b> on it.`:T==='tank'?`Stress-relieve the fresh weld — <b>HEAT GUN</b>.`:T==='tpsp'?`Dry the tile out — hold the <b>HEAT GUN</b> on it.`:`Heat the seized bearing — hold the <b>HEAT GUN</b> until it glows.`;
+ case'heat2':return`Cure the filler — <b>HEAT GUN</b> on it.`;case'grease':return T==='strut'?`Grease the piston rod — drag the <b>GREASE</b> gun along it.`:`Grease it all the way round — <b>GREASE</b> gun.`;
+ case'spin':return`Flick the rotor with your <b>HAND</b>. Listen to that bearing.`;case'weld':return`Weld the crack — hold the <b>WELDER</b> and trace it slowly.`;
+ case'seal':return T==='tpsp'?`Fill the crack with <b>SEALANT</b> — trace it.`:`Lay a bead of <b>SEALANT</b> all the way round.`;case'rivet':return`Set the rivets — tap each hole with the <b>RIVET</b> gun.`;
+ case'lidclose':return`Close the lid — <b>HAND</b>, drag it back down.`;case'torque':return`Screws back in: tap a hole, then hold the <b>DRIVER</b>. Let go at the <b>CLICK</b>.`}return''}
+
+// ---------- geometry (features are stored in 0..1 part space; circles use the part's short side) ----------
+function jag(a,b,n,amp){const pts=[];for(let i=0;i<n;i++){const t=i/(n-1),dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,j=(i&&i<n-1)?rnd(-amp,amp):0;pts.push([a[0]+dx*t-dy/L*j,a[1]+dy*t+dx/L*j])}return pts}
+function bGeo(){const el=$('bench'),bot=((el&&el.offsetHeight)||190)/PX,y0=98,avail=Math.max(150,H-bot-y0-8);const lid=!SHAPE[BN?BN.type:'battery'];
+ const h=Math.round(Math.min(avail*(lid?.4:.5),lid?92:110)),w=Math.round(Math.min(W-40,150));const x=Math.round((W-w)/2),y=Math.round(lid?y0+h+4:y0+(avail-h-30)/2+10);
+ const ry=y+h+7,rh=Math.max(16,Math.min(24,H-bot-ry-4));return{P:{x,y,w,h},m:Math.min(w,h),stock:{x:x,y:ry,w:38,h:rh},bin:{x:x+w/2-17,y:ry,w:34,h:rh},dish:{x:x+w-38,y:ry,w:38,h:rh}}}
+function bN(g,p){return[g.P.x+p[0]*g.P.w,g.P.y+p[1]*g.P.h]}
+function ringPts(g,c,r,n){const C=bN(g,c),R=r*g.m,o=[];for(let i=0;i<n;i++){const a=i/n*6.283;o.push([C[0]+Math.cos(a)*R,C[1]+Math.sin(a)*R])}return o}
+function pathPx(g,s){return s.ring?ringPts(g,s.ring[0],s.ring[1],s.n):s.path.map(p=>bN(g,p))}
+const CELLR=[[.08,.12,.4,.34],[.52,.12,.4,.34],[.08,.54,.4,.34],[.52,.54,.4,.34]];
+function bMake(type){const steps=RECIPE[type].map(k=>({k}));const F={screws:[[.07,.13],[.93,.13],[.07,.87],[.93,.87]],tape:(type==='cell'||type==='solar')?{a:[.05,.06],b:[.95,.06]}:{a:[.05,.79],b:[.95,.79]}};
+ const iL=steps.findIndex(s=>s.k==='lid'),iC=steps.findIndex(s=>s.k==='lidclose');steps.forEach((s,i)=>{s.inside=iL>=0&&i>iL&&i<iC});
+ const bad=(Math.random()*(type==='battery'?4:3))|0;F.bad=bad;F.trY=[.3,.52,.74];
+ if(type==='tpsp')F.crack=jag([.18,.32],[.82,.66],10,.06);if(type==='cell')F.cracks=[jag([.3,.3],[.7,.75],6,.06),jag([.5,.5],[.85,.25],5,.05),jag([.5,.5],[.15,.8],5,.05)];
+ for(const s of steps){switch(s.k){
+  case'probe':s.pts=type==='battery'?CELLR.map(r=>[r[0]+r[2]/2,r[1]+r[3]/2]):F.trY.map(y=>[.16,y]);s.bad=bad;s.seen={};break;
+  case'pull':case'insert':s.rect=type==='cell'?[.08,.14,.84,.72]:CELLR[bad];break;
+  case'solder':if(type==='computer'){s.path=jag([.42,F.trY[bad]],[.6,F.trY[bad]],6,0);s.got=[];s.dw=[]}else if(type==='dact'){s.pads=[[.58,.74],[.74,.74]];s.p=[0,0]}else{const r=CELLR[bad];s.pads=[[r[0]+.035,r[1]+r[3]/2],[r[0]+r[2]-.035,r[1]+r[3]/2]];s.p=[0,0]}break;
+  case'switch':{s.cur=[0,1,2,3].map(()=>Math.random()<.5?1:0);do{s.tgt=[0,1,2,3].map(()=>Math.random()<.5?1:0)}while(s.tgt.join()===s.cur.join());s.pos=[0,1,2,3].map(i=>[.6+i*.075,.86])}break;
+  case'reseat':s.rect=type==='computer'?[.86,.36,.1,.28]:type==='antenna'?[.08,.58,.16,.24]:[.1,.34,.16,.3];s.sub=0;s.grime=new Float32Array(8).fill(1);break;
+  case'heat':case'heat2':s.c=type==='sensor'?[.5,.5]:type==='tank'?[.42,.5]:type==='tpsp'?[.5,.5]:type==='cell'?[.5,.5]:[.5,.5];s.r=type==='sensor'?.3:type==='cell'||type==='tpsp'?.42:type==='tank'?.28:.15;s.temp=0;break;
+  case'grease':if(type==='strut')s.path=jag([.74,.5],[.97,.5],8,0);else if(type==='solar')s.path=jag([.08,.12],[.92,.12],10,0);else{s.ring=[type==='dact'?[.34,.5]:[.5,.5],type==='dact'?.2:type==='valve'?.17:.15];s.n=12}s.got=[];break;
+  case'weld':s.path=type==='antenna'?jag([.52,.22],[.86,.5],9,.04):type==='solar'?jag([.3,.24],[.7,.3],9,.04):type==='tank'?jag([.3,.22],[.52,.78],10,.05):type==='strut'?jag([.32,.24],[.44,.76],9,.03):jag([.55,.2],[.85,.5],9,.04);s.got=[];s.dw=[];break;
+  case'seal':if(type==='sensor'){s.ring=[[.5,.5],.36];s.n=18}else if(type==='valve'){s.ring=[[.5,.5],.28];s.n=16}else if(type==='rcsv'){s.ring=[[.6,.5],.2];s.n=14}else if(type==='tank'){s.ring=[[.8,.32],.13];s.n=10}
+   else if(type==='strut')s.path=jag([.71,.26],[.71,.74],6,0);else if(type==='tpsp')s.path=F.crack;else s.path=[...jag([.08,.14],[.92,.14],6,0),...jag([.92,.2],[.92,.86],4,0),...jag([.86,.86],[.08,.86],6,0),...jag([.08,.8],[.08,.2],4,0)];s.got=[];break;
+  case'rivet':s.pts=type==='solar'?[[.2,.2],[.4,.2],[.6,.2],[.8,.2]]:type==='tank'?[[.14,.86],[.3,.86],[.7,.86],[.86,.86]]:type==='strut'?[[.6,.3],[.6,.7],[.66,.3],[.66,.7]]:[[.08,.12],[.92,.12],[.08,.88],[.92,.88]];s.got=[];break;
+  case'spin':s.c=[.5,.5];s.r=.36;break;
+  case'polish':s.c=[.5,.5];s.r=.3;s.grime=new Float32Array(100).map(()=>.5+Math.random()*.5);break;
+  case'torque':s.T=[0,0,0,0];s.clickT=[0,0,0,0];s.perfect=0;break}}
+ const gw=24,gh=14,gr=new Float32Array(gw*gh);for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const n=Math.sin(i*.9+j*1.3)*.2+Math.sin(i*.37-j*.71)*.25;gr[j*gw+i]=clamp(.55+n+Math.random()*.25,0,1)}
+ if(SHAPE[type]==='tube')for(let j=0;j<gh;j++)if(Math.abs((j+.5)/gh-.5)>.38)for(let i=0;i<gw;i++)gr[j*gw+i]=0;
+ return{type,steps,F,i:0,tool:'rag',gw,gh,grime:gr,tape:{p:0,gone:0,fly:null},scr:SHAPE[type]?[0,0,0,0]:[2,2,2,2],sa:[0,0,0,0],dish:0,lid:0,lidA:null,cellOut:false,cellIn:false,rot:0,om:0,seized:true,fog:1,fx:[],beads:[],fly:[],down:false,last:null,drag:null,hold:null,fin:null,q:{torque:0,tn:0,strip:0},t:0,talk:8}}
+
+// ---------- UI ----------
+(function(){const st=document.createElement('style');st.textContent=`#bench{position:fixed;left:0;right:0;bottom:0;z-index:10;display:none;padding:0 6px calc(8px + env(safe-area-inset-bottom));pointer-events:none}#bench.show{display:block}#bench>*{pointer-events:auto}
+#bnlog{background:var(--pn);border:2px solid #000;font-size:11px;line-height:1.35;padding:3px 6px;height:34px;overflow:hidden;margin-bottom:5px;color:var(--ink)}#bnlog .g{color:var(--te)}#bnlog .r{color:var(--rd)}#bnlog .y{color:var(--am)}
+#bnt{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}#bnt button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:3px 2px;font-size:8px;letter-spacing:.02em}#bnt canvas{width:20px;height:20px;image-rendering:pixelated}
+#bnt button.sug{animation:mxp .6s infinite alternate}#bna{display:flex;gap:4px;margin-top:4px}#bna button{flex:1;padding:8px}
+#locker{position:fixed;left:0;right:0;bottom:0;z-index:10;display:none;padding:0 6px calc(8px + env(safe-area-inset-bottom));pointer-events:none}#locker.show{display:block}#locker>*{pointer-events:auto}
+#lklog{background:var(--pn);border:2px solid #000;font-size:11px;line-height:1.35;padding:3px 6px;min-height:34px;margin-bottom:5px;color:var(--ink)}#lklog .r{color:var(--rd)}#lklog .y{color:var(--am)}#lklog .g{color:var(--te)}
+#lka{display:flex;gap:4px}#lka button{flex:1;padding:8px}`;document.head.appendChild(st);
+ document.body.insertAdjacentHTML('beforeend','<div id="bench"><div id="bnlog"></div><div id="bnt"></div><div id="bna"><button id="bnHint">HINT</button><button id="bnExit">EXIT</button></div></div><div id="locker"><div id="lklog"></div><div id="lka"><button id="lkSort">AUTO-SORT</button><button id="lkClose" class="hot">CLOSE</button></div></div>');
+ const tb=$('bnt');for(const[k,n]of BTOOLS){const b=document.createElement('button');b.dataset.t=k;const c=document.createElement('canvas'),im=spr(BICON[k]);c.width=im.width;c.height=im.height;c.getContext('2d').drawImage(im,0,0);b.append(c,n);b.onclick=()=>{if(!BN)return;BN.tool=k;bToolUI();BS.tick()};tb.append(b)}
+ $('bnHint').onclick=()=>{if(!BN||BN.fin)return;const s=bCur();if(s){bLog(stepTxt(s),'y');BN.pulse=2.5;SFX.beep()}};
+ $('bnExit').onclick=()=>{if(!BN)return;if(BN.fin&&BN.fin.t>1.5)return benchDone();if(BN.i>0&&!BN.fin){modal(`<h2>LEAVE THE BENCH?</h2><div class="c">This ${itemName(BN.type)} isn't finished. Progress on it will be lost.</div><button class="hot" onclick="closeModal()">KEEP WORKING</button><button onclick="closeModal();closeBench()">LEAVE</button>`);return}closeBench()};
+ $('lkClose').onclick=()=>closeLocker();$('lkSort').onclick=()=>{lkSort();BS.whoosh();lkLog('Sorted: working spares, Ex-3 parts, consumables, then the broken stuff.')};
+ // INV button in the top bar
+ const bi=document.createElement('button');bi.id='bInv';bi.textContent='INV';$('bMap').after(bi);bi.onclick=()=>{if(benchOpen||lockerOpen||dishOpen||mxOpen||engOpen||(G&&(G.earth||G.burn||G.anim))){SFX.bad();return}openLocker()}})();
+function bToolUI(){const s=bCur(),need=s&&!BN.fin?bNeedTool(s):null;document.querySelectorAll('#bnt button').forEach(b=>{b.classList.toggle('on',b.dataset.t===BN.tool);b.classList.toggle('sug',!!need&&b.dataset.t===need&&BN.tool!==need)})}
+function bNeedTool(s){return s.k==='reseat'?(s.sub===1?'rag':'hand'):BTOOL[s.k]}
+function bLog(t,c=''){const l=$('bnlog');l.innerHTML=`<div class="${c}">› ${t}</div>`+l.innerHTML;while(l.children.length>2)l.lastChild.remove()}
+const bCur=()=>BN&&BN.steps[BN.i];
+
+// ---------- open / close ----------
+function openBench(type,src){if(!BENCHABLE[type])return;closePanel();BN=bMake(type);BN.src=src;benchOpen=true;
+ if(src.kind==='tray'){BN.eng=true;engOpen=false;$('eng').classList.remove('show')}if(src.kind==='locker'){lockerOpen=false;$('locker').classList.remove('show')}
+ $('bench').classList.add('show');$('ctrl').style.display='none';$('info').style.display='none';$('az').style.display='';$('bnlog').innerHTML='';$('bnExit').textContent='EXIT';$('bnExit').classList.remove('hot');
+ BN.tool=bNeedTool(BN.steps[0]);bToolUI();bLog(stepTxt(BN.steps[0]),'y');azCD=0;say(pick([`Ooh, bench time. Let's bring this ${itemName(type).toLowerCase()} back to life.`,'I love this part. *settles in on the lamp*','Tools out! Let\'s make it pretty.']))}
+function closeBench(){benchOpen=false;bLoopsOff();$('bench').classList.remove('show');const src=BN&&BN.src;BN=null;
+ if(src&&src.kind==='tray'){engOpen=true;$('eng').classList.add('show');$('az').style.display='none';return}
+ if(src&&src.kind==='locker'){openLocker(src.from);return}$('ctrl').style.display='';$('info').style.display=''}
+function benchDone(){const src=BN.src,type=BN.type;G.stats.refurb=(G.stats.refurb||0)+1;
+ if(src.kind==='tray'){const b=bus();const t=b&&b.tray[src.j];if(t&&t.type===type&&t.dead){t.dead=false;t.heal=true;t.benched=true}}
+ else{G.broken=G.broken||{};if((G.broken[type]||0)>0){G.broken[type]--;G.inv[type]=(G.inv[type]||0)+1}}
+ save();closeBench();setTimeout(()=>{azCD=0;say(pick(['Good as new! Better, honestly.','Look at it shine. *proud chirp*','Into the spares it goes!']))},300)}
+function bStepDone(msg){const s=bCur();s.done=true;BN.i++;BS.step();buzz(12);if(msg)bLog(msg,'g');
+ if(BN.i>=BN.steps.length){BN.fin={t:0,chime:0,stamp:0};bLoopsOff();bToolUI();return}
+ const n=bCur();if(n.k==='reseat')n.sub=0;setTimeout(()=>{if(!BN||BN.fin)return;bLog(stepTxt(n),'y');const nt=bNeedTool(n);if(BN.tool!==nt){BN.tool=nt;bToolUI()}else bToolUI()},450);
+ if(Math.random()<.3){azCD=0;azR('bench')}}
+
+// ---------- input ----------
+function bHitScrew(g,X,Y){let best=-1,bd=11;BN.F.screws.forEach((p,i)=>{const q=bN(g,p),d=Math.hypot(X-q[0],Y-q[1]);if(d<bd){bd=d;best=i}});return best}
+function bIn(X,Y,r){return X>=r.x&&X<=r.x+r.w&&Y>=r.y&&Y<=r.y+r.h}
+function bRect(g,r){return{x:g.P.x+r[0]*g.P.w,y:g.P.y+r[1]*g.P.h,w:r[2]*g.P.w,h:r[3]*g.P.h}}
+function bWrong(s){const need=bNeedTool(s);bLog(`That needs the <b>${BTOOLS.find(t=>t[0]===need)[1]}</b>.`,'y');BN.pulse=1.5;SFX.bad();bToolUI()}
+cv.addEventListener('pointerdown',e=>{if(!benchOpen||!BN)return;try{cv.setPointerCapture(e.pointerId)}catch(_){}const[X,Y]=ep(e),g=bGeo(),s=bCur();BN.down=true;BN.last=[X,Y];BN.lt=performance.now();BN.vx=BN.vy=0;BN.px=X;BN.py=Y;
+ if(!s||BN.fin)return;const tool=BN.tool,need=bNeedTool(s),P=g.P,onPart=X>P.x-8&&X<P.x+P.w+8&&Y>P.y-P.h-8&&Y<P.y+P.h+8;
+ if(tool!==need){if(onPart||bIn(X,Y,g.stock)||bIn(X,Y,g.bin)||bIn(X,Y,g.dish))bWrong(s);return}
+ switch(s.k){
+  case'peel':{const a=bN(g,BN.F.tape.a),b=bN(g,BN.F.tape.b),fx=a[0]+(b[0]-a[0])*BN.tape.p;if(Math.hypot(X-fx,Y-a[1])<14){BN.drag={k:'tape'};BS.crinkle()}break}
+  case'unscrew':{const i=bHitScrew(g,X,Y);if(i>=0&&BN.scr[i]===2)BN.hold={k:'unscrew',i,p:0,need:.7};break}
+  case'lid':case'lidclose':if(X>P.x-6&&X<P.x+P.w+6&&Y>P.y-P.h-6&&Y<P.y+P.h+6)BN.drag={k:'lid',y0:Y,a0:BN.lid};break;
+  case'probe':s.pts.forEach((p,i)=>{const q=bN(g,p);if(Math.hypot(X-q[0],Y-q[1])<11)bProbe(s,i,q)});break;
+  case'pull':{const r=bRect(g,s.rect);if(bIn(X,Y,r)){BN.drag={k:'pull',x:X,y:Y,ox:X-r.x,oy:Y-r.y};BS.pop();buzz(10)}break}
+  case'insert':if(bIn(X,Y,g.stock)){BN.drag={k:'insert',x:X,y:Y};BS.tick()}break;
+  case'solder':if(s.pads)s.pads.forEach((p,i)=>{const q=bN(g,p);if(s.p[i]<1&&Math.hypot(X-q[0],Y-q[1])<11)BN.hold={k:'pad',i}});break;
+  case'switch':s.pos.forEach((p,i)=>{const q=bN(g,p);if(Math.abs(X-q[0])<6&&Math.abs(Y-q[1])<9){s.cur[i]^=1;BS.click();buzz(6);if(s.cur.join()===s.tgt.join())setTimeout(()=>{if(BN&&bCur()===s)bStepDone('Switches match the sticker. Config restored.')},250)}});break;
+  case'reseat':{const r=bRect(g,s.rect);const out=s.sub>=1;const rr=out?{x:r.x+(s.rect[0]>.5?10:-10),y:r.y,w:r.w,h:r.h}:r;if(bIn(X,Y,{x:rr.x-5,y:rr.y-5,w:rr.w+10,h:rr.h+10})){if(s.sub===0){s.sub=1;BS.pop();buzz(12);bLog('Popped out. Ugh — green crust on the pins.','y');setTimeout(()=>{if(BN&&bCur()===s){BN.tool='rag';bToolUI();bLog(stepTxt(s),'y')}},400)}else if(s.sub===2){BS.click();setTimeout(BS.click,60);buzz([10,20,10]);bStepDone('CLICK. Seated and latched.')}}break}
+  case'rivet':s.pts.forEach((p,i)=>{if(s.got[i])return;const q=bN(g,p);if(Math.hypot(X-q[0],Y-q[1])<11){s.got[i]=1;BS.rivet();buzz(18);for(let j=0;j<6;j++)BN.fx.push({x:q[0],y:q[1],vx:rnd(-30,30),vy:rnd(-30,30),t:.3,c:PAL.g});if(s.pts.every((_,k)=>s.got[k]))setTimeout(()=>{if(BN&&bCur()===s)bStepDone('Rivets set. Rock solid.')},250)}});break;
+  case'spin':{const c=bN(g,s.c);if(Math.hypot(X-c[0],Y-c[1])<s.r*g.m+6)BN.drag={k:'spin',a:Math.atan2(Y-c[1],X-c[0]),w:0}}break;
+  case'torque':{const i=bHitScrew(g,X,Y);if(i<0)break;if(BN.scr[i]===0){if(BN.dish<=0)break;BN.dish--;BN.scr[i]=1;s.T[i]=0;BS.tick();BS.clink();buzz(8);const q=bN(g,BN.F.screws[i]);BN.fly.push({x0:g.dish.x+g.dish.w/2,y0:g.dish.y+g.dish.h/2,x1:q[0],y1:q[1],t:0,back:1})}else if(BN.scr[i]===1)BN.hold={k:'torque',i,clicked:0,ct:0};break}}});
+cv.addEventListener('pointermove',e=>{if(!benchOpen||!BN||!BN.down)return;const[X,Y]=ep(e),g=bGeo(),s=bCur();const now=performance.now(),dt=Math.max(.008,(now-BN.lt)/1000),dx=X-BN.last[0],dy=Y-BN.last[1],mv=Math.hypot(dx,dy);BN.vx=dx/dt;BN.vy=dy/dt;BN.lt=now;BN.px=X;BN.py=Y;
+ if(!s||BN.fin){BN.last=[X,Y];return}const tool=BN.tool;
+ if(BN.drag){const d=BN.drag;d.x=X;d.y=Y;
+  if(d.k==='tape'){const a=bN(g,BN.F.tape.a),b=bN(g,BN.F.tape.b),np=clamp((X-a[0])/(b[0]-a[0]),0,1);if(np>BN.tape.p){if(Math.random()<.8)BS.crinkle();BN.tape.p=np;if(np>.97){BN.tape.gone=1;BN.tape.fly={x:X,y:Y,vx:20,vy:-30,a:0,t:0};BN.drag=null;bStepDone('Tape off. That crinkle, though.')}}}
+  if(d.k==='lid'){BN.lid=clamp(d.a0+(d.y0-Y)/(g.P.h*1.4),0,1);if(Math.abs(dy)>1&&Math.random()<.25)tone(240+BN.lid*120,.04,'sawtooth',.012)}
+  if(d.k==='spin'){const c=bN(g,s.c),a=Math.atan2(Y-c[1],X-c[0]),da=wrap(a-d.a);d.a=a;if(BN.seized){BN.rot+=da*.05;if(Math.abs(da)>.05&&Math.random()<.3)tone(90,.06,'sawtooth',.03)}else{BN.rot+=da;d.w=(d.w||0)*.5+(da/dt)*.5;BN.om=0}}}
+ if((s.k==='wipe'&&tool==='rag')){const P=g.P,R=8;let hit=0;for(let j=0;j<BN.gh;j++)for(let i=0;i<BN.gw;i++){const cx0=P.x+(i+.5)*P.w/BN.gw,cy0=P.y+(j+.5)*P.h/BN.gh;if(Math.hypot(X-cx0,Y-cy0)<R){const k=j*BN.gw+i;if(BN.grime[k]>0){BN.grime[k]=Math.max(0,BN.grime[k]-mv*.045);hit=1}}}
+  if(hit){if(Math.random()<.35)BS.swish(mv/6);if(Math.random()<.25)BN.fx.push({x:X+rnd(-4,4),y:Y+rnd(-4,4),vx:rnd(-8,8),vy:rnd(5,18),t:rnd(.3,.7),c:pick(['#5a4a2a','#3a2a14','#6b5a3a'])})}
+  let sum=0;for(const v of BN.grime)sum+=v;if(sum/BN.grime.length<.06){BN.grime.fill(0);bStepDone('Spotless. You can read the label again.')}}
+ if(s.k==='polish'&&tool==='rag'){const c=bN(g,s.c),R=s.r*g.m;let hit=0;for(let j=0;j<10;j++)for(let i=0;i<10;i++){const px0=c[0]-R+(i+.5)*R/5,py0=c[1]-R+(j+.5)*R/5;if(Math.hypot(px0-c[0],py0-c[1])>R)continue;if(Math.hypot(X-px0,Y-py0)<7&&s.grime[j*10+i]>0){s.grime[j*10+i]=Math.max(0,s.grime[j*10+i]-mv*.05);hit=1}}
+  if(hit&&Math.random()<.4)tone(2200+Math.random()*900,.03,'sine',.012);let n=0,t=0;for(let j=0;j<10;j++)for(let i=0;i<10;i++){const px0=c[0]-R+(i+.5)*R/5,py0=c[1]-R+(j+.5)*R/5;if(Math.hypot(px0-c[0],py0-c[1])>R)continue;n++;t+=s.grime[j*10+i]}if(t/n<.05)bStepDone('Crystal clear. *squeak*')}
+ if(s.k==='reseat'&&s.sub===1&&tool==='rag'){const r=bRect(g,s.rect),rr={x:r.x+(s.rect[0]>.5?10:-10),y:r.y,w:r.w,h:r.h};if(bIn(X,Y,{x:rr.x-6,y:rr.y-6,w:rr.w+12,h:rr.h+12})){for(let i=0;i<8;i++)s.grime[i]=Math.max(0,s.grime[i]-mv*.03*(.6+Math.random()*.8));if(Math.random()<.3)BS.swish(.4);if(s.grime.every(v=>v<=0)){s.sub=2;BS.beepG();bLog('Shiny copper. Now click it home — <b>HAND</b>.','g');setTimeout(()=>{if(BN&&bCur()===s){BN.tool='hand';bToolUI()}},350)}}}
+ if((s.k==='weld'&&tool==='welder')||(s.k==='solder'&&tool==='solder'&&s.path)){const pts=pathPx(g,s);pts.forEach((q,i)=>{if(s.got[i])return;if(Math.hypot(X-q[0],Y-q[1])<9){s.dw[i]=(s.dw[i]||0)+dt;if(s.dw[i]>(s.k==='weld'?.08:.06)){s.got[i]=1;BN.beads.push({x:q[0],y:q[1],t:0,k:s.k});bFill(s,pts,i);buzz(s.k==='weld'?8:4)}}});
+  if(pts.every((_,i)=>s.got[i]))bStepDone(s.k==='weld'?'Crack welded. Watch it cool…':'Gap bridged. Shiny solder fillet.')}
+ if((s.k==='seal'&&tool==='seal')||(s.k==='grease'&&tool==='grease')){const pts=pathPx(g,s);pts.forEach((q,i)=>{if(s.got[i])return;if(Math.hypot(X-q[0],Y-q[1])<9){s.got[i]=1;BN.beads.push({x:q[0]+rnd(-.5,.5),y:q[1]+rnd(-.5,.5),t:0,k:s.k});bFill(s,pts,i);if(s.k==='grease'||Math.random()<.6)BS.squish()}});
+  if(pts.every((_,i)=>s.got[i]))bStepDone(s.k==='seal'?'Bead laid all the way round. Clean line.':'Greased. Smells like a real workshop.')}
+ BN.last=[X,Y]});
+const bUp=e=>{if(!benchOpen||!BN)return;const g=bGeo(),s=bCur();BN.down=false;const d=BN.drag;BN.drag=null;const h=BN.hold;BN.hold=null;
+ if(h&&h.k==='torque'&&s&&s.k==='torque'){const T=s.T[h.i];if(h.clicked){BN.scr[h.i]=2;BN.q.tn++;const late=h.ct;if(late<.4){BN.q.torque++;bLog('Torqued to spec. ✓','g')}else bLog('Tight — a touch past the click.','y');BS.tick()}
+  else if(T>.15)bLog('Snug, not torqued yet — hold until it clicks.','y');if(BN.scr.every(v=>v===2))setTimeout(()=>{if(BN&&bCur()===s)bStepDone(BN.q.torque===4?'All four torqued to spec. Chef\'s kiss.':'Lid screws torqued.')},300)}
+ if(!d||!s||BN.fin)return;
+ if(d.k==='lid'){const open=s.k==='lid';if(open&&BN.lid>.55){BN.lidA=1}else if(!open&&BN.lid<.45){BN.lidA=0}else BN.lidA=open?0:1}
+ if(d.k==='pull'){if(bIn(d.x,d.y,{x:g.bin.x-8,y:g.bin.y-12,w:g.bin.w+16,h:g.bin.h+20})){BN.cellOut=true;BS.thunk();if(BN.type==='cell')BS.tinkle();buzz(20);bStepDone(BN.type==='cell'?'Cracked glass binned. *tinkle*':'Dead cell binned. Good riddance.')}else{BS.tick()}}
+ if(d.k==='insert'){const r=bRect(g,s.rect);if(bIn(d.x,d.y,{x:r.x-8,y:r.y-8,w:r.w+16,h:r.h+16})){BN.cellIn=true;BS.click();BS.thunk();buzz([10,15]);bStepDone(BN.type==='cell'?'New cover glass seated.':'Fresh cell seated.')}else BS.tick()}
+ if(d.k==='spin'){const w=Math.abs(d.w||0);if(BN.seized){bLog('It barely budges. Still seized.','y');SFX.bad()}else{BN.om=clamp(d.w||0,-60,60);if(w>5){bLog('Wheeeee. Silky smooth.','g');if(s.k==='spin'&&!s.done)setTimeout(()=>{if(BN&&bCur()===s)bStepDone()},700)}else bLog('Give it a proper flick!','y')}}};
+cv.addEventListener('pointerup',bUp);cv.addEventListener('pointercancel',bUp);
+// fill the gap to already-done neighbours so beads read as one continuous ripple
+function bFill(s,pts,i){const n=pts.length,closed=!!s.ring;for(const j of[i-1,i+1]){const jj=closed?(j+n)%n:j;if(jj<0||jj>=n||!s.got[jj])continue;const a=pts[i],b=pts[jj],L=Math.hypot(b[0]-a[0],b[1]-a[1]),m=Math.max(1,Math.floor(L/2.2));for(let k=1;k<m;k++)BN.beads.push({x:a[0]+(b[0]-a[0])*k/m,y:a[1]+(b[1]-a[1])*k/m,t:-k*.02,k:s.k==='solder'?'solder':s.k})}}
+function bProbe(s,i,q){const bad=i===s.bad;s.seen[i]=1;(bad?BS.beepR:BS.beepG)();BN.fx.push({x:q[0],y:q[1]-8,t:1.4,txt:BN.type==='battery'?(bad?'0.4 V':(3.9+Math.random()*.2).toFixed(1)+' V'):(bad?'OPEN':'0.1 OHM'),c:bad?PAL.r:PAL.t,vx:0,vy:-6});
+ if(bad)setTimeout(()=>{if(BN&&bCur()===s)bStepDone(BN.type==='battery'?'Found it — that cell is flat dead.':'That trace is open. Burnt clean through.')},500)}
+
+// ---------- tick + render ----------
+function benchTick(rdt){const B=BN,s=bCur(),g=bGeo();B.t+=rdt;const sl=B.fin&&B.fin.t<.9?.3:1,dt=rdt*sl;
+ B.talk-=rdt;if(B.talk<=0){B.talk=rnd(16,28);azR('idle')}if(B.pulse)B.pulse=Math.max(0,B.pulse-rdt);
+ if(B.lidA!=null){const tg=B.lidA;B.lid+=(tg-B.lid)*Math.min(1,rdt*10);if(Math.abs(B.lid-tg)<.01){B.lid=tg;B.lidA=null;if(tg===1){BS.clack();buzz(12);if(s&&s.k==='lid')bStepDone('Lid open. Let\'s see the guts.')}else{BS.clack();SFX.latch();buzz([10,20]);if(s&&s.k==='lidclose')bStepDone('Lid down. Latched.')}}}
+ const h=B.hold;let welding=false,soldering=false,heating=false;
+ if(B.down&&s&&!B.fin){const X=B.px,Y=B.py;
+  if(s.k==='weld'&&B.tool==='welder'&&pathPx(g,s).some(q=>Math.hypot(X-q[0],Y-q[1])<12)){welding=true;if(Math.random()<.6)B.fx.push({x:X,y:Y,vx:rnd(-50,50),vy:rnd(-60,10),t:rnd(.15,.4),c:pick([PAL.y,PAL.w,PAL.o])})}
+  if(s.k==='solder'&&B.tool==='solder'&&s.path&&pathPx(g,s).some(q=>Math.hypot(X-q[0],Y-q[1])<12)){soldering=true}
+  if((s.k==='heat'||s.k==='heat2')&&B.tool==='heat'){const c=bN(g,s.c),inZ=Math.hypot(X-c[0],Y-c[1])<s.r*g.m+10;heating=true;if(inZ){s.temp=Math.min(1,s.temp+rdt/1.8);if(B.type==='sensor')B.fog=Math.max(0,1-s.temp*1.1)}if(Math.random()<.4)B.fx.push({x:X+rnd(-3,3),y:Y-6,vx:rnd(-4,4),vy:-rnd(10,22),t:.5,c:'#ffffff22',shim:1});
+   if(s.temp>=1){if(B.type==='wheel'||B.type==='swu')B.seized=false;bStepDone(B.type==='sensor'?'Fog baked out. You can see right through it.':s.k==='heat2'?'Filler cured hard.':B.type==='wheel'||B.type==='swu'?'Bearing\'s glowing — the old grease let go.':'Nice and warm.')}}}
+ if(s&&(s.k==='heat'||s.k==='heat2')&&!heating)s.temp=Math.max(0,s.temp-rdt*.15);
+ if(h&&s){if(h.k==='unscrew'){h.p+=rdt;B.sa[h.i]+=rdt*12;if(Math.random()<.5)BS.tick();if(h.p>=h.need){B.scr[h.i]=0;B.dish++;const q=bN(g,B.F.screws[h.i]);B.fly.push({x0:q[0],y0:q[1],x1:g.dish.x+g.dish.w/2,y1:g.dish.y+g.dish.h/2,t:0});BS.pop();buzz(8);B.hold=null;if(B.scr.every(v=>v===0))setTimeout(()=>{if(BN&&bCur()===s)bStepDone('All four out, in the dish.')},450)}}
+  if(h.k==='pad'&&B.down){soldering=true;s.p[h.i]=Math.min(1,s.p[h.i]+rdt/.9);const q=bN(g,s.pads[h.i]);if(Math.random()<.5)B.fx.push({x:q[0]+rnd(-1,1),y:q[1]-3,vx:rnd(-3,3),vy:-rnd(8,16),t:.8,c:'#dcd4f455',shim:1});if(s.p[h.i]>=1){B.beads.push({x:q[0],y:q[1],t:0,k:'pad'});BS.click();buzz(6);B.hold=null;if(s.p.every(v=>v>=1))bStepDone('Both joints shiny and concave. Textbook.')}}
+  if(h.k==='torque'){const i=h.i;s.T[i]+=rdt*.95;B.sa[i]-=rdt*(h.clicked?2:9);if(!h.clicked&&Math.random()<.45)BS.tick();if(!h.clicked&&s.T[i]>=1){h.clicked=1;BS.torque();buzz(25);B.fx.push({x:bN(g,B.F.screws[i])[0],y:bN(g,B.F.screws[i])[1]-10,t:.9,txt:'CLICK',c:PAL.t,vx:0,vy:-8})}if(h.clicked){h.ct+=rdt;if(h.ct>.9){B.hold=null;B.down=false;s.T[i]=0;B.q.strip++;BS.pop();SFX.bad();buzz([30,20,30]);bLog('<span class="r">Stripped it!</span> Backed it off — try again, let go at the click.');B.fx.push({x:bN(g,B.F.screws[i])[0],y:bN(g,B.F.screws[i])[1]-10,t:1,txt:'STRIPPED',c:PAL.r,vx:0,vy:-8})}}}}
+ bLoop('weld',welding,{f:3000,q:.7,v:.07,osc:'sawtooth',of:92+Math.random()*8,ov:.016});bLoop('solder',soldering,{f:6500,q:1.5,v:.03});bLoop('heat',heating,{type:'lowpass',f:900,v:.08,osc:'sine',of:118,ov:.02});
+ if(welding&&Math.random()<.25)puff(.04,.03,5000+Math.random()*3000);
+ // spinning rotor
+ if(!(B.drag&&B.drag.k==='spin')){B.rot+=B.om*dt;B.om*=Math.exp(-(B.seized?3:.32)*dt)}const w=Math.abs(B.om);bLoop('spin',w>.6,{f:300+w*35,q:5,v:Math.min(.05,w*.003),osc:'triangle',of:50+w*9,ov:Math.min(.025,w*.0012)});
+ for(const f of B.fly)f.t+=dt*2.6;B.fly=B.fly.filter(f=>{if(f.t>=1&&!f.done){f.done=1;if(!f.back)BS.clink()}return f.t<1});
+ if(B.tape.fly){const f=B.tape.fly;f.t+=dt;f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=30*dt;f.a+=dt*4;if(f.t>1.2)B.tape.fly=null}
+ for(const p of B.fx){p.t-=dt;p.x+=(p.vx||0)*dt;p.y+=(p.vy||0)*dt;if(!p.txt&&!p.shim)p.vy+=40*dt}B.fx=B.fx.filter(p=>p.t>0);for(const b of B.beads)b.t+=dt;
+ if(B.fin){B.fin.t+=rdt;if(B.fin.t>.25&&!B.fin.chime){B.fin.chime=1;BS.chime()}if(B.fin.t>1.1&&!B.fin.stamp){B.fin.stamp=1;BS.stamp();buzz([20,30,60]);bLog(`<b>REFURBISHED!</b> ${itemName(B.type)} is a working spare again.`,'g');$('bnExit').textContent='DONE ✓';$('bnExit').classList.add('hot')}}}
+function bShade(c,k){const n=parseInt(c.slice(1),16),r=n>>16,g=(n>>8)&255,b=n&255,f=v=>Math.round(clamp(v*k,0,255)).toString(16).padStart(2,'0');return'#'+f(r)+f(g)+f(b)}
+function bLerpC(a,b,t){const A=parseInt(a.slice(1),16),Bc=parseInt(b.slice(1),16),f=(s)=>Math.round(((A>>s)&255)+(((Bc>>s)&255)-((A>>s)&255))*t);return'#'+[16,8,0].map(s=>f(s).toString(16).padStart(2,'0')).join('')}
+function bBeadCol(b){if(b.k==='weld'){const t=Math.max(0,b.t);return t<.4?bLerpC('#fff4c0',PAL.o,t/.4):t<2?bLerpC(PAL.o,'#7a4a2a',(t-.4)/1.6):t<4?bLerpC('#7a4a2a',PAL.g,(t-2)/2):PAL.g}if(b.k==='solder'||b.k==='pad')return b.t<.3?'#ffffff':PAL.c;if(b.k==='seal')return'#e8e4d4';return'#c89a3a'}
+function renderBench(now,rdt){const B=BN;if(!B)return;benchTick(rdt);const g=bGeo(),P=g.P,s=bCur(),col=BCOL[B.type]||['#6b6880','#8a87a0'],shape=SHAPE[B.type]||'box',inside=B.lid>.02;
+ // workbench + lamp pool
+ cx.fillStyle='#120f1c';cx.fillRect(0,0,W,H);for(let y=0;y<H;y+=12)px('#18142a',0,y,W,1);
+ const lx=W/2,ly=P.y+P.h*.3;for(let r=4;r>0;r--){cx.fillStyle=`rgba(255,226,170,${.025})`;cx.beginPath();cx.ellipse(lx,ly,W*.18*r,H*.1*r,0,0,6.283);cx.fill()}
+ // bottom row: stock / bin / dish
+ const lab=(r,t,c)=>{px(PAL.k,r.x-1,r.y-1,r.w+2,r.h+2);px('#1a1730',r.x,r.y,r.w,r.h);ptext(cx,t,r.x+r.w/2,r.y+r.h-6,c,1)};
+ const needStock=s&&s.k==='insert',needBin=s&&s.k==='pull';lab(g.stock,'STOCK',needStock?PAL.a:PAL.S);lab(g.bin,'BIN',needBin?PAL.a:PAL.S);lab(g.dish,'DISH',PAL.S);
+ if(!B.cellIn||true){const sx=g.stock.x+4,sy=g.stock.y+3;if(B.type==='cell'){px('#6f96d8aa',sx,sy,14,8);px('#ffffff55',sx+2,sy+1,6,1)}else if(B.type==='battery'){for(let i=0;i<2;i++){px(PAL.k,sx+i*9,sy,8,9);px('#2b4a96',sx+i*9+1,sy+1,6,7);px(PAL.g,sx+i*9+2,sy,1,1)}}}
+ for(let i=0;i<B.dish;i++){const dx=g.dish.x+5+i*7,dy=g.dish.y+5;px(PAL.k,dx-1,dy-1,5,5);px(PAL.g,dx,dy,3,3);px(PAL.k,dx+1,dy,1,3)}
+ // shadow
+ px('#00000066',P.x+3,P.y+4,P.w,P.h);
+ // ---- part body ----
+ if(shape==='tube'){const r=P.h*.38,cyy=P.y+P.h/2;px(PAL.k,P.x-1,cyy-r-1,P.w+2,r*2+2);for(let y=-r;y<r;y++){const k=1-Math.abs(y/r),c=y<-r*.4?col[1]:y>r*.4?bShade(col[0],.75):col[0];px(c,P.x,cyy+y,P.w,1)}px('#ffffff33',P.x+2,cyy-r*.7,P.w-4,1);if(B.type==='strut'){px(PAL.k,P.x+P.w*.7,cyy-r*.6,P.w*.3,r*1.2);px('#d8d6e4',P.x+P.w*.72,cyy-r*.45,P.w*.27,r*.9);px(col[0],P.x+P.w*.6,cyy-r-2,6,r*2+4)}
+  else{px(bShade(col[0],.6),P.x+P.w*.75,cyy-r*.5,8,r);ptext(cx,BLABEL[B.type],P.x+P.w*.35,cyy-3,PAL.k,1)}if(B.type==='strut')ptext(cx,BLABEL.strut,P.x+P.w*.3,cyy-3,PAL.k,1)}
+ else if(shape==='plate'){px(PAL.k,P.x-1,P.y-1,P.w+2,P.h+2);px(col[0],P.x,P.y,P.w,P.h);if(B.type==='tpsp'){for(let j=0;j<4;j++)for(let i=0;i<6;i++)px(bShade(col[1],.9+((i+j)%2)*.15),P.x+2+i*P.w/6,P.y+2+j*P.h/4,P.w/6-2,P.h/4-2)}else{for(let i=1;i<6;i++)px(col[1],P.x+i*P.w/6,P.y,1,P.h);for(let j=1;j<4;j++)px(col[1],P.x,P.y+j*P.h/4,P.w,1)}
+  if(B.type==='cell'){const gr=bRect(g,[.08,.14,.84,.72]);if(!B.cellOut&&!(B.drag&&B.drag.k==='pull')){px('#9fd0ff22',gr.x,gr.y,gr.w,gr.h);for(const c of B.F.cracks)for(let k=0;k<c.length-1;k++){const a=bN(g,c[k]),b=bN(g,c[k+1]),L=Math.hypot(b[0]-a[0],b[1]-a[1]);for(let t=0;t<L;t++)px('#e8f4ff',a[0]+(b[0]-a[0])*t/L,a[1]+(b[1]-a[1])*t/L)}}
+   else if(B.cellIn){px('#9fd0ff33',gr.x,gr.y,gr.w,gr.h);px('#ffffff44',gr.x+3,gr.y+2,gr.w*.4,1)}if(B.drag&&B.drag.k==='pull'){}}
+  if(B.type==='tpsp'&&F_crackVisible())bDrawPath(g,B.F.crack.map(p=>bN(g,p)),'#000000')}
+ else{// box: interior first (visible as the lid lifts)
+  px(PAL.k,P.x-1,P.y-1,P.w+2,P.h+2);px(bShade(col[0],.5),P.x,P.y,P.w,P.h);if(inside){px('#0d0b18',P.x+3,P.y+3,P.w-6,P.h-6);bInterior(g,now)}}
+ // features on the outside / inside
+ bFeatures(g,now);
+ // lid (box shapes)
+ if(shape==='box'){const a=B.lid;if(a<.5){const hh=P.h*Math.cos(a*Math.PI);if(hh>.5){const shade=1-a*.8;px(PAL.k,P.x-1,P.y-1,P.w+2,hh+2);px(bShade(col[0],shade),P.x,P.y,P.w,hh);px(bShade(col[1],shade),P.x,P.y,P.w,2);px(bShade(col[1],shade),P.x,P.y,2,hh);
+   if(a<.05){if(BLABEL[B.type]){px(B.type==='battery'?PAL.y:PAL.c,P.x+P.w/2-28,P.y+P.h/2-6,56,11);ptext(cx,BLABEL[B.type],P.x+P.w/2,P.y+P.h/2-3,PAL.k,1)}if(B.type==='sensor'){const c=bN(g,[.5,.5]);pcirc(c[0],c[1],g.m*.3,PAL.k)}
+    B.F.screws.forEach((p,i)=>{const q=bN(g,p),v=B.scr[i];const hold=B.hold&&B.hold.i===i&&(B.hold.k==='unscrew'||B.hold.k==='torque');const lift=B.hold&&B.hold.k==='unscrew'&&B.hold.i===i?B.hold.p/B.hold.need*2:0;
+     px(PAL.k,q[0]-3,q[1]-3,7,7);px('#0a0812',q[0]-2,q[1]-2,5,5);if(v){const y=q[1]-lift;px(PAL.k,q[0]-3,y-3,7,7);px(v===1?PAL.c:PAL.g,q[0]-2,y-2,5,5);const an=B.sa[i];px(PAL.k,q[0]+Math.round(Math.cos(an)*2),y+Math.round(Math.sin(an)*2),1,1);px(PAL.k,q[0]-Math.round(Math.cos(an)*2),y-Math.round(Math.sin(an)*2),1,1);px(PAL.k,q[0],y,1,1)}
+     if(hold&&B.hold.k==='torque'&&s&&s.T)bGauge(q[0],q[1]-16,s.T[i],B.hold.clicked)})}}}
+  else{const hh=P.h*-Math.cos(a*Math.PI);px(PAL.k,P.x-1,P.y-hh-1,P.w+2,hh+2);px('#2a2638',P.x,P.y-hh,P.w,hh);px('#3a3650',P.x+3,P.y-hh+3,P.w-6,Math.max(0,hh-6));px(PAL.k,P.x,P.y-1,P.w,1)}}
+ // grime (on the closed lid / outer skin)
+ if(B.lid<.05&&B.grime.some(v=>v>0)){const gw=B.gw,gh=B.gh;for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const v=B.grime[j*gw+i];if(v<=.02)continue;cx.globalAlpha=Math.min(.92,v);px((i*7+j*3)%5?'#3a2a14':'#5a4426',P.x+i*P.w/gw,P.y+j*P.h/gh,Math.ceil(P.w/gw),Math.ceil(P.h/gh))}cx.globalAlpha=1}
+ // tape (outside)
+ if(!B.tape.gone&&B.steps.some(x=>x.k==='peel')){const a=bN(g,B.F.tape.a),b=bN(g,B.F.tape.b),fx=a[0]+(b[0]-a[0])*B.tape.p;px('#d98c22',fx,a[1]-2,b[0]-fx,5);px('#f2b24a',fx,a[1]-2,b[0]-fx,1);if(B.tape.p>0){for(let x=a[0];x<fx;x+=1){const k=(fx-x)/Math.max(1,fx-a[0]);px('#f2b24a',x,a[1]-2-k*7+Math.sin(x*.5+now/90)*.6,1,2)}}else{px('#f2b24a',a[0]-3,a[1]-3,4,6)}}
+ if(B.tape.fly){const f=B.tape.fly;cx.globalAlpha=1-f.t/1.2;px('#f2b24a',f.x-6,f.y+Math.sin(f.a)*3,12,3);cx.globalAlpha=1}
+ // dragged items
+ if(B.drag&&B.drag.k==='pull'){const r=bRect(g,s.rect),x=B.drag.x-B.drag.ox,y=B.drag.y-B.drag.oy;if(B.type==='cell'){px('#9fd0ff55',x,y,r.w,r.h);px('#ffffff',x+r.w*.3,y+r.h*.3,r.w*.4,1)}else bCellDraw(x,y,r.w,r.h,true)}
+ if(B.drag&&B.drag.k==='insert'){const r=bRect(g,s.rect);if(B.type==='cell'){px('#9fd0ff55',B.drag.x-r.w/2,B.drag.y-r.h/2,r.w,r.h)}else bCellDraw(B.drag.x-r.w/2,B.drag.y-r.h/2,r.w,r.h,false)}
+ // flying screws
+ for(const f of B.fly){const t=f.t,e=1-Math.pow(1-t,3),x=f.x0+(f.x1-f.x0)*e,y=f.y0+(f.y1-f.y0)*e-Math.sin(t*Math.PI)*14;px(PAL.k,x-2,y-2,5,5);px(PAL.g,x-1,y-1,3,3)}
+ // pulse guidance
+ if(s&&!B.fin&&(B.pulse>0||(Math.floor(now/700)%3===0&&B.t>3)))for(const q of bTargets(g,s)){const k=(now/600)%1;pcirc(q[0],q[1],5+k*6,k<.5?PAL.a:PAL.U)}
+ // particles + floating text
+ for(const p of B.fx){if(p.txt){ptext(cx,p.txt,p.x,p.y,p.c,1);continue}if(p.shim){cx.globalAlpha=Math.max(0,p.t);px(p.c,p.x,p.y,2,1);cx.globalAlpha=1;continue}px(p.c,p.x,p.y,1,1)}
+ // tool at the finger (offset up-left so the finger doesn't hide it)
+ if(B.down&&!B.fin){const im=bIcon(B.tool);cx.drawImage(im,Math.round(B.px-16),Math.round(B.py-18));
+  if(B.tool==='heat'&&s&&(s.k==='heat'||s.k==='heat2')){const c=bN(g,s.c);bBar(c[0]-15,c[1]+s.r*g.m+6,30,s.temp,PAL.o)}
+  if(B.tool==='welder'){cx.fillStyle='rgba(255,240,200,.08)';cx.fillRect(0,0,W,H);px('#ffffff',B.px-1,B.py-1,3,3)}}
+ // step dots
+ B.steps.forEach((st,i)=>px(i<B.i?PAL.t:i===B.i?PAL.a:PAL.S,W/2-B.steps.length*3+i*6,P.y-(shape==='box'?P.h:0)-12,4,2));
+ // finale: slow shine sweep + stamp
+ if(B.fin){const t=B.fin.t;if(t>.2&&t<1.4){const k=(t-.2)/1.2,x=P.x-20+(P.w+40)*k;cx.save();cx.beginPath();cx.rect(P.x,P.y-(shape==='box'?0:0),P.w,P.h);cx.clip();cx.fillStyle='rgba(255,255,255,.35)';cx.beginPath();cx.moveTo(x,P.y);cx.lineTo(x+10,P.y);cx.lineTo(x-10,P.y+P.h);cx.lineTo(x-20,P.y+P.h);cx.fill();cx.restore();if(Math.random()<.5)B.fx.push({x:x+rnd(-8,8),y:P.y+rnd(0,P.h),vx:0,vy:-6,t:.5,c:PAL.w})}
+  if(t>1.1){const sc=Math.max(1,2.4-(t-1.1)*6);const bw=86*sc/1.4,bh=18;cx.save();cx.translate(P.x+P.w/2,P.y+P.h/2);cx.rotate(-.12);px(PAL.t,-bw/2,-bh/2,bw,bh);px('#0d0b1a',-bw/2+2,-bh/2+2,bw-4,bh-4);ptext(cx,'REFURBISHED',0,-3,PAL.t,1);cx.restore();
+   const stars=(B.q.tn?B.q.torque/B.q.tn:1)>=.99&&!B.q.strip?3:B.q.strip>1?1:2;ptext(cx,'★'.repeat(stars)+'☆'.repeat(3-stars),P.x+P.w/2,P.y+P.h/2+12,PAL.y,1)}}}
+function F_crackVisible(){const s=BN.steps.find(x=>x.k==='seal');return!(s&&s.done)}
+function bBar(x,y,w,v,c){px(PAL.k,x-1,y-1,w+2,5);px('#1a1730',x,y,w,3);px(c,x,y,w*clamp(v,0,1),3)}
+function bGauge(x,y,T,clicked){const R=9;px('#00000099',x-R-2,y-R-2,R*2+5,R+6);for(let a=-2.2;a<=2.2;a+=.12){const k=(a+2.2)/4.4,c=k>.82&&k<=.92?PAL.t:k>.92?PAL.r:PAL.S;px(c,x+Math.sin(a)*R,y-Math.cos(a)*R+R*.5)}const an=-2.2+4.4*clamp(T/1.1,0,1);for(let r=0;r<R-1;r++)px(clicked?PAL.t:PAL.w,x+Math.sin(an)*r,y-Math.cos(an)*r+R*.5);ptext(cx,clicked?'CLICK':'TORQUE',x,y+R*.5+3,clicked?PAL.t:PAL.c,1)}
+function bCellDraw(x,y,w,h,bad){px(PAL.k,x,y,w,h);px(bad?'#5a3a5a':'#2b4a96',x+1,y+1,w-2,h-2);px(bad?'#7a5a7a':'#4a6ad0',x+2,y+2,w-4,2);px(PAL.g,x+1,y+h/2-1,2,3);px(PAL.g,x+w-3,y+h/2-1,2,3);if(bad){px('#8a6a8a',x+w*.3,y+h*.25,w*.4,h*.5)}else ptext(cx,'3.7V',x+w/2,y+h/2-2,PAL.c,1)}
+function bDrawPath(g,pts,c){for(let k=0;k<pts.length-1;k++){const a=pts[k],b=pts[k+1],L=Math.hypot(b[0]-a[0],b[1]-a[1]);for(let t=0;t<L;t++)px(c,a[0]+(b[0]-a[0])*t/L,a[1]+(b[1]-a[1])*t/L)}}
+function bInterior(g,now){const B=BN,T=B.type,m=g.m;
+ if(T==='battery'){const pr=B.steps.find(x=>x.k==='probe');CELLR.forEach((r,i)=>{const R=bRect(g,r);if(i===B.F.bad){if(B.cellIn)bCellDraw(R.x,R.y,R.w,R.h,false);else if(!B.cellOut&&!(B.drag&&B.drag.k==='pull'))bCellDraw(R.x-1,R.y-1,R.w+2,R.h+2,true);else{px('#06050c',R.x,R.y,R.w,R.h);ptext(cx,'EMPTY',R.x+R.w/2,R.y+R.h/2-2,PAL.S,1)}}else bCellDraw(R.x,R.y,R.w,R.h,false);if(pr&&pr.seen[i]&&i!==B.F.bad)ptext(cx,'OK',R.x+R.w-5,R.y+2,PAL.t,1);if(pr&&pr.seen[i]&&i===B.F.bad&&!B.cellOut)ptext(cx,'X',R.x+R.w-5,R.y+2,PAL.r,1)})}
+ else if(T==='computer'){const R=bRect(g,[.05,.06,.9,.88]);px('#164034',R.x,R.y,R.w,R.h);for(let i=0;i<3;i++)px('#0f2a22',R.x+R.w*.3+i*R.w*.2,R.y+R.h*.1,R.w*.12,R.h*.12);
+  const sol=B.steps.find(x=>x.k==='solder');B.F.trY.forEach((y,i)=>{const a=bN(g,[.16,y]),b=bN(g,[.84,y]);px(PAL.u,a[0],a[1],b[0]-a[0],1);if(i===B.F.bad&&!(sol&&sol.done)){const c=bN(g,[.51,y]);px('#1a120a',c[0]-9,c[1]-3,18,7);px('#3a2614',c[0]-6,c[1]-2,12,5);px('#164034',c[0]-5,c[1],10,1)}px(PAL.c,a[0]-2,a[1]-2,4,4)});
+  const sw=B.steps.find(x=>x.k==='switch');if(sw){const p0=bN(g,sw.pos[0]),p3=bN(g,sw.pos[3]);px('#a33a2a',p0[0]-4,p0[1]-6,p3[0]-p0[0]+8,12);sw.pos.forEach((p,i)=>{const q=bN(g,p);px(PAL.k,q[0]-2,q[1]-5,4,10);px(PAL.w,q[0]-1,q[1]+(sw.cur[i]?-4:1),3,4)});const st=bN(g,[.6,.72]);px(PAL.w,st[0]-4,st[1]-4,p3[0]-p0[0]+8,7);sw.tgt.forEach((v,i)=>{const q=bN(g,sw.pos[i]);px(PAL.k,q[0]-1,st[1]-3+(v?0:2),2,3)})}}
+ else if(T==='wheel'||T==='swu'){const c=bN(g,[.5,.5]),R=m*.36;fillCirc(c[0],c[1],R,'#57507c');fillCirc(c[0],c[1],R-2,'#8a87a0');for(let k=0;k<5;k++){const a=B.rot+k*1.2566;for(let r=R*.25;r<R-3;r++)px('#57507c',c[0]+Math.cos(a)*r,c[1]+Math.sin(a)*r,2,2)}
+  const ht=B.steps.find(x=>x.k==='heat'),gr=B.steps.find(x=>x.k==='grease');const glow=ht?ht.temp:0;fillCirc(c[0],c[1],m*.15,gr&&gr.done?'#b4b2c6':bLerpC('#7d5d26',PAL.o,glow*.8));fillCirc(c[0],c[1],m*.07,PAL.k);px(PAL.w,c[0]+Math.cos(B.rot)*R*.8,c[1]+Math.sin(B.rot)*R*.8,2,2)}
+ else if(T==='sensor'){const c=bN(g,[.5,.5]),R=m*.3;fillCirc(c[0],c[1],R+3,'#2a2638');fillCirc(c[0],c[1],R,'#22306e');px('#6f96d8',c[0]-R*.5,c[1]-R*.5,R*.4,2);if(B.fog>0){cx.globalAlpha=B.fog*.85;fillCirc(c[0],c[1],R,'#dcd4f4');cx.globalAlpha=1}
+  const po=B.steps.find(x=>x.k==='polish');if(po&&!po.done&&B.fog<.3){for(let j=0;j<10;j++)for(let i=0;i<10;i++){const v=po.grime[j*10+i];if(v<=0)continue;const x=c[0]-R+i*R/5,y=c[1]-R+j*R/5;if(Math.hypot(x+R/10-c[0],y+R/10-c[1])>R)continue;cx.globalAlpha=v*.6;px('#a8a0b8',x,y,Math.ceil(R/5),Math.ceil(R/5));cx.globalAlpha=1}}}
+ else{// generic mechanism: base plate, bracket, gear, port
+  const R=bRect(g,[.06,.08,.88,.84]);px('#24202e',R.x,R.y,R.w,R.h);const br=bRect(g,[.5,.16,.4,.42]);px(PAL.S,br.x,br.y,br.w,br.h);px(PAL.g,br.x,br.y,br.w,1);const gc=bN(g,T==='dact'?[.34,.5]:[.5,.5]);if(T!=='antenna'){fillCirc(gc[0],gc[1],m*.16,'#6b6880');for(let k=0;k<10;k++){const a=k*.628+B.t*.1;px('#8a87a0',gc[0]+Math.cos(a)*m*.17-1,gc[1]+Math.sin(a)*m*.17-1,3,3)}fillCirc(gc[0],gc[1],m*.05,PAL.k)}
+  if(T==='dact'){[[.58,.74],[.74,.74]].forEach(p=>{const q=bN(g,p);px(PAL.u,q[0]-2,q[1]-2,4,4);px(PAL.r,q[0]-1,q[1]+2,2,8)})}}
+ // connector (reseat)
+ const rs=B.steps.find(x=>x.k==='reseat');if(rs){const r=bRect(g,rs.rect),off=rs.done?0:rs.sub>=1?(rs.rect[0]>.5?10:-10):0;px(PAL.k,r.x+off-1,r.y-1,r.w+2,r.h+2);px('#d6d4e4',r.x+off,r.y,r.w,r.h);for(let i=0;i<8;i++){const y=r.y+2+i*(r.h-4)/8;px(rs.sub>=1&&rs.grime[i]>0&&!rs.done?bLerpC(PAL.u,'#3a8a4a',rs.grime[i]):PAL.u,r.x+off+(rs.rect[0]>.5?-2:r.w),y,2,1)}}}
+function fillCirc(x,y,r,c){for(let dy=-Math.floor(r);dy<=r;dy++){const w=Math.sqrt(Math.max(0,r*r-dy*dy));px(c,Math.round(x-w),Math.round(y+dy),Math.max(1,Math.round(w*2)),1)}}
+function bFeatures(g,now){const B=BN,inside=B.lid>.9,closed=B.lid<.05;
+ for(const s of B.steps){const vis=s.inside?inside:(SHAPE[B.type]?true:closed);if(!vis)continue;
+  if((s.k==='weld'||(s.k==='solder'&&s.path))&&!s.done){const pts=pathPx(g,s);bDrawPath(g,pts,s.k==='weld'?'#0a0608':'#1a120a');pts.forEach((q,i)=>{if(!s.got[i]&&s===bCur())px('#ffffff22',q[0],q[1],1,1)})}
+  if((s.k==='seal'||s.k==='grease')&&s===bCur()){const pts=pathPx(g,s);pts.forEach((q,i)=>{if(!s.got[i])px(s.k==='seal'?'#ffffff33':'#c89a3a44',q[0],q[1],1,1)})}
+  if(s.k==='rivet'){s.pts.forEach((p,i)=>{const q=bN(g,p);if(s.got[i]){px(PAL.k,q[0]-3,q[1]-3,6,6);px(PAL.g,q[0]-2,q[1]-2,4,4);px(PAL.w,q[0]-1,q[1]-2,1,1)}else{px(PAL.k,q[0]-2,q[1]-2,4,4)}})}
+  if(s.k==='solder'&&s.pads){s.pads.forEach((p,i)=>{const q=bN(g,p);px(PAL.u,q[0]-2,q[1]-2,5,5);if(s.p[i]>0&&s.p[i]<1){cx.globalAlpha=s.p[i];px(PAL.c,q[0]-1,q[1]-1,3,3);cx.globalAlpha=1}})}
+  if(s.k==='probe'&&s===bCur())s.pts.forEach(p=>{const q=bN(g,p);px(PAL.c,q[0]-1,q[1]-1,3,3)})}
+ for(const b of B.beads){const st=B.steps.find(x=>x.k===(b.k==='pad'?'solder':b.k));if(st&&st.inside&&!inside)continue;if(st&&!st.inside&&!SHAPE[B.type]&&!closed)continue;const c=bBeadCol(b);if(b.k==='weld'){px(PAL.k,b.x-2,b.y-2,5,5);px(c,b.x-1.5,b.y-1.5,4,4);if(b.t<1.5)px('#ffffff',b.x-.5,b.y-.5,1,1)}else if(b.k==='grease'){px('#7a5a1a',b.x-2,b.y-1,4,3);px(c,b.x-1,b.y-1,2,1)}else if(b.k==='seal'){px('#b4b0c0',b.x-1.5,b.y-1.5,4,4);px(c,b.x-1,b.y-1,2,2)}else{px('#8a87a0',b.x-1.5,b.y-1.5,4,4);px(b.t<.3?'#ffffff':PAL.c,b.x-1,b.y-1,2,2)}
+  if(b.k==='weld'&&b.t<1.2&&Math.random()<.04)BN.fx.push({x:b.x,y:b.y,vx:rnd(-3,3),vy:-rnd(6,12),t:.6,c:'#ffffff22',shim:1})}}
+function bTargets(g,s){const B=BN;switch(s.k){case'wipe':return[[g.P.x+g.P.w/2,g.P.y+g.P.h/2]];case'polish':case'heat':case'heat2':case'spin':return[bN(g,s.c)];case'peel':{const a=bN(g,B.F.tape.a),b=bN(g,B.F.tape.b);return[[a[0]+(b[0]-a[0])*B.tape.p,a[1]]]}
+ case'unscrew':return B.F.screws.map((p,i)=>B.scr[i]===2?bN(g,p):null).filter(Boolean);case'torque':return B.F.screws.map((p,i)=>B.scr[i]<2?bN(g,p):null).filter(Boolean);case'lid':return[[g.P.x+g.P.w/2,g.P.y+g.P.h*.8]];case'lidclose':return[[g.P.x+g.P.w/2,g.P.y-g.P.h*.5]];
+ case'probe':return s.pts.map(p=>bN(g,p));case'pull':{const r=bRect(g,s.rect);return[[r.x+r.w/2,r.y+r.h/2],[g.bin.x+g.bin.w/2,g.bin.y+g.bin.h/2]]}case'insert':{const r=bRect(g,s.rect);return[[g.stock.x+g.stock.w/2,g.stock.y+g.stock.h/2],[r.x+r.w/2,r.y+r.h/2]]}
+ case'solder':return s.pads?s.pads.filter((_,i)=>s.p[i]<1).map(p=>bN(g,p)):[pathPx(g,s)[0]];case'switch':return s.pos.filter((_,i)=>s.cur[i]!==s.tgt[i]).map(p=>bN(g,p));case'reseat':{const r=bRect(g,s.rect);return[[r.x+r.w/2+(s.sub>=1?(s.rect[0]>.5?10:-10):0),r.y+r.h/2]]}
+ case'weld':case'seal':case'grease':{const pts=pathPx(g,s),i=pts.findIndex((_,k)=>!s.got[k]);return i>=0?[pts[i]]:[]}case'rivet':return s.pts.filter((_,i)=>!s.got[i]).map(p=>bN(g,p))}return[]}
+
+// ================= LOCKER (inventory): reorganize, toss, send broken parts to the bench =================
+const LK_ORDER=['battery','wheel','computer','sensor','antenna','solar','tank','valve','tpsp','strut','dact','swu','rcsv','tag','fuse','patch','cell','m3','m5'];
+function lkKeys(){const o=[];for(const k in G.inv)if(G.inv[k]>0)o.push(k);for(const k in (G.broken||{}))if(G.broken[k]>0)o.push('!'+k);return o}
+function lkCount(key){return key[0]==='!'?(G.broken[key.slice(1)]||0):(G.inv[key]||0)}
+function lkSync(){G.broken=G.broken||{};const N=30;let L=G.locker&&G.locker.length?G.locker.slice():new Array(N).fill(null);while(L.length<N)L.push(null);const have=new Set(lkKeys());L=L.map(k=>k&&have.has(k)?k:null);for(const k of have)if(!L.includes(k)){const e=L.indexOf(null);if(e>=0)L[e]=k;else L.push(k)}G.locker=L}
+function lkSort(){const ks=lkKeys(),rank=k=>(k[0]==='!'?100:0)+Math.max(0,LK_ORDER.indexOf(k.replace('!','')));ks.sort((a,b)=>rank(a)-rank(b));const L=new Array(Math.max(30,ks.length)).fill(null);ks.forEach((k,i)=>L[i]=k);G.locker=L;save()}
+function lkGeo(){const el=$('locker'),bot=((el&&el.offsetHeight)||90)/PX,top=60,cols=5,rows=Math.ceil(G.locker.length/cols),zoneH=30,avail=H-bot-top-12-zoneH-16;const ch=Math.min(36,Math.floor(avail/rows)),cw=Math.floor((W-12)/cols);
+ return{top,cols,cw,ch,x0:Math.round((W-cw*cols)/2),y0:top+12,bench:{x:6,y:top+12+rows*ch+8,w:Math.floor(W/2)-10,h:zoneH},air:{x:Math.floor(W/2)+4,y:top+12+rows*ch+8,w:Math.floor(W/2)-10,h:zoneH}}}
+function lkSlotAt(g,X,Y){const i=Math.floor((X-g.x0)/g.cw),j=Math.floor((Y-g.y0)/g.ch);if(i<0||i>=g.cols||j<0||X<g.x0||Y<g.y0)return-1;const k=j*g.cols+i;return k<G.locker.length?k:-1}
+function lkLog(t){$('lklog').innerHTML=t}
+function openLocker(from){closePanel();lkSync();lockerOpen=true;LK={drag:null,toss:[],sel:null,from:from||(G.docked?'station':G.loc==='ground'?'ground':null),air:0,t:0};$('locker').classList.add('show');$('ctrl').style.display='none';$('info').style.display='none';$('az').style.display='none';
+ lkLog(`Drag to reorganize (the repair tray follows this order). Drag onto <b>${G.loc==='ground'?'THE BIN':'THE AIRLOCK'}</b> to toss one. Broken parts go on the <b>BENCH</b>.`)}
+function closeLocker(){const from=LK&&LK.from;lockerOpen=false;LK=null;$('locker').classList.remove('show');$('ctrl').style.display='';$('info').style.display='';$('az').style.display='';save();if(from==='station'||(!from&&G.docked))openStation('svc');else if(from==='ground'||(!from&&G.loc==='ground'))openGround('g_rep')}
+function lkInfo(key){const br=key[0]==='!',k=key.replace('!',''),n=lkCount(key),m=(BMASS[k]??1)*n;const f=COMPDEF[k]?COMPDEF[k].f:EXPN[k]?'Ex-3 line-replaceable unit.':k==='m3'||k==='m5'?'Fasteners.':k==='fuse'?'Bus fuse.':k==='patch'?'Multi-layer insulation patch.':k==='cell'?'Solar cell.':'';
+ lkLog(br?`<span class="r">BROKEN ${itemName(k).toUpperCase()} ×${n}</span> · ${m.toFixed(1)} kg. Drag it onto the <b>BENCH</b> to refurbish it, or toss it.`:`<b>${itemName(k).toUpperCase()} ×${n}</b> · ${m<1?m.toFixed(2):m.toFixed(1)} kg · ${f}`)}
+cv.addEventListener('pointerdown',e=>{if(!lockerOpen||!LK)return;const[X,Y]=ep(e),g=lkGeo(),i=lkSlotAt(g,X,Y);if(i>=0&&G.locker[i]){LK.drag={i,key:G.locker[i],x:X,y:Y,x0:X,y0:Y};BS.tick();buzz(6)}});
+cv.addEventListener('pointermove',e=>{if(!lockerOpen||!LK||!LK.drag)return;const[X,Y]=ep(e);LK.drag.x=X;LK.drag.y=Y});
+const lkUp=e=>{if(!lockerOpen||!LK||!LK.drag)return;const d=LK.drag;LK.drag=null;const g=lkGeo(),X=d.x,Y=d.y;
+ if(Math.hypot(X-d.x0,Y-d.y0)<4){lkInfo(d.key);return}
+ const j=lkSlotAt(g,X,Y);if(j>=0){const t=G.locker[j];G.locker[j]=d.key;G.locker[d.i]=t;BS.clack();buzz(8);return}
+ if(bIn(X,Y,g.air)){const k=d.key.replace('!',''),br=d.key[0]==='!',n=k==='m3'||k==='m5'?Math.min(4,lkCount(d.key)):1;if(br)G.broken[k]-=n;else G.inv[k]-=n;LK.toss.push({key:d.key,x:X,y:Y,t:0});LK.air=1.2;BS.whoosh();buzz(15);lkLog(`Tossed ${n>1?n+'× ':''}${br?'broken ':''}${itemName(k)}. ${G.loc==='ground'?'Into the bin.':'Out the airlock — it\'ll burn up on reentry.'} Locker ${Math.round(lockerMass())}/${lockerCap()} kg.`);lkSync();save();if(Math.random()<.4){azCD=0;say(pick(['Bye bye!','Littering in orbit… just this once.','Lighter ship, less fuel. Smart.']))}return}
+ if(bIn(X,Y,g.bench)){const k=d.key.replace('!','');if(d.key[0]!=='!'){lkLog(`That ${itemName(k)} works fine. Only <span class="r">broken</span> parts go on the bench.`);SFX.bad();return}if(!BENCHABLE[k]){lkLog('Nothing to refurbish there.');return}openBench(k,{kind:'locker',from:LK.from});return}};
+cv.addEventListener('pointerup',lkUp);cv.addEventListener('pointercancel',lkUp);
+function lkIcon(key,x,y,s){const k=key.replace('!',''),br=key[0]==='!';if(EXPN[k]&&typeof mxSpareIcon==='function')mxSpareIcon(k,x,y,s,br);else drawItem(k,x,y,s,br);if(br){px(PAL.r,x,y+s-3,s,2);px(PAL.k,x+s*.2,y+s*.2,1,s*.6);px(PAL.r,x+s*.5,y+1,1,s*.5)}}
+function renderLocker(now,rdt){const L=LK;if(!L)return;L.t+=rdt;const g=lkGeo();cx.fillStyle='#14111f';cx.fillRect(0,0,W,H);for(let y=0;y<H;y+=16)for(let x=(y/16)%2?8:0;x<W;x+=16)px('#1a1628',x,y,15,15);
+ const m=lockerMass(),cap=lockerCap();ptext(cx,`EX-3 LOCKER  ${Math.round(m)}/${cap} KG`,W/2,g.top-4,m>cap?PAL.r:PAL.c,1);bBar(12,g.top+4,W-24,m/cap,m>cap?PAL.r:m>cap*.85?PAL.a:PAL.t);
+ G.locker.forEach((key,i)=>{const x=g.x0+(i%g.cols)*g.cw,y=g.y0+Math.floor(i/g.cols)*g.ch;px(PAL.k,x+1,y+1,g.cw-2,g.ch-2);px('#211c30',x+2,y+2,g.cw-4,g.ch-4);px('#2c2640',x+2,y+2,g.cw-4,1);
+  if(!key||(L.drag&&L.drag.i===i))return;const s=Math.min(16,g.ch-12);lkIcon(key,x+g.cw/2-s/2,y+3,s);const n=lkCount(key);ptext(cx,'X'+n,x+g.cw-3,y+g.ch-8,key[0]==='!'?PAL.r:PAL.y,2)});
+ const br=g.bench,ar=g.air,hot=L.drag;px(PAL.k,br.x,br.y,br.w,br.h);px(hot&&hot.key[0]==='!'?'#1d7d88':'#1a2a2a',br.x+1,br.y+1,br.w-2,br.h-2);ptext(cx,'BENCH',br.x+br.w/2,br.y+br.h/2-6,PAL.t,1);ptext(cx,'REFURBISH',br.x+br.w/2,br.y+br.h/2+2,PAL.T,1);
+ px(PAL.k,ar.x,ar.y,ar.w,ar.h);const open=Math.min(1,L.air);for(let x=0;x<ar.w-2;x+=6)px((x/6)%2?PAL.a:'#2a2210',ar.x+1+x,ar.y+1,6,ar.h-2);if(open>0){px('#05040b',ar.x+ar.w/2-(ar.w/2-2)*open,ar.y+3,(ar.w-4)*open,ar.h-6)}ptext(cx,G.loc==='ground'?'BIN':'AIRLOCK',ar.x+ar.w/2,ar.y+ar.h/2-3,PAL.w,1);L.air=Math.max(0,L.air-rdt);
+ for(const t of L.toss){t.t+=rdt;const k=Math.min(1,t.t/.6);const x=t.x+(ar.x+ar.w/2-t.x)*k,y=t.y+(ar.y+ar.h/2-t.y)*k;cx.save();cx.translate(x,y);cx.rotate(t.t*8);cx.scale(1-k*.8,1-k*.8);lkIcon(t.key,-8,-8,16);cx.restore()}L.toss=L.toss.filter(t=>t.t<.6);
+ if(L.drag){lkIcon(L.drag.key,L.drag.x-10,L.drag.y-14,20)}}
+
+// ---------- hooks: eng tray → bench, service card, Azure lines ----------
+(function(){const b=document.createElement('button');b.id='eBench';b.textContent='BENCH ▸';b.style.display='none';b.style.background='#1d7d88';$('eHint').before(b);b.onclick=()=>{const bb=bus();if(!bb)return;const j=bb.tray.findIndex(t=>t.dead&&BENCHABLE[t.type]);if(j<0)return;openBench(bb.tray[j].type,{kind:'tray',j})}})();
+setInterval(()=>{const b=$('eBench');if(!b)return;const bb=engOpen&&typeof bus==='function'&&bus();b.style.display=bb&&bb.tray&&bb.tray.some(t=>t.dead&&BENCHABLE[t.type])?'':'none'},300);
+if(typeof AZE!=='undefined')AZE.bench={idle:['So. Satisfying.','*watches the screw spin, mesmerized*','I could watch you do this all day.','Careful, careful…','*hums along with the heat gun*','This is my favourite part of the job.','Smells like solder and success.','*perches on the lamp to supervise*'],fixed:['Ooh, clean.','*approving chirp*'],sloppy:['Gently!'],bench:['Ooh, that sound.','*happy wing flutter*','Next!','Beautiful.']};
+AZL.bench=['Next!','Beautiful.'];
+
+function lockerSummary(){const nb=Object.values(G.broken||{}).reduce((a,b)=>a+b,0);return`Locker ${Math.round(lockerMass())}/${lockerCap()} kg`+(nb?` · <span class="r">${nb} broken part${nb>1?'s':''}</span> to refurbish`:'')}
+
 // ================= BOOT =================
 addEventListener('resize',resize);resize();
 try{if(!load()||!G||G.v!==2)newGame();
@@ -2058,7 +2400,7 @@ if(!G.contract&&!G.offers.length)genOffers();
 $('go').onclick=()=>{audioInit();$('tap').style.display='none';if(G.loc==='ground'){openGround();say('Back at Knight Field. Smells like jet fuel. Chirp!')}else if(G.docked){openStation('contracts');say(G.done?'Welcome back, boss! Pick a job.':'Hi! I\'m Azure, your copilot. Pick a contract — chirp!')}};
 requestAnimationFrame(frame);
 window.LL={get G(){return G},acceptContract,askTrip,startTrip,openEng,closeEng,release,get E(){return E},L3,LO,targets,trayTiles,beginBurns,finishBurn,action,doAction,objective,anchor,focusPoint,get view(){return view},
- askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,burnTgt,trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
+ askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,burnTgt,openBench,closeBench,benchDone,openLocker,closeLocker,lockerMass,lockerCap,bGeo,bN,pathPx,bRect,bTargets,lkGeo,lkSync,get BN(){return BN},get LK(){return LK},trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
 </script>
 <script>
 (function(){const K=['lastlight_v2','lastlight_opts'],$i=id=>document.getElementById(id);
