@@ -44,9 +44,9 @@ button:disabled{opacity:.35}
 #act:disabled{background:#1a1730}
 #sas{position:fixed;right:6px;left:6px;bottom:calc(168px + env(safe-area-inset-bottom));display:none}
 .row{display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap}
-#panel,#modal{position:fixed;inset:0;z-index:20;background:#07060fcc;display:none;align-items:flex-start;justify-content:center;padding:calc(14px + env(safe-area-inset-top)) 8px 14px;overflow:auto;touch-action:pan-y}
+#panel,#modal{position:fixed;inset:0;z-index:20;background:#07060fcc;display:none;align-items:flex-start;justify-content:center;padding:calc(14px + env(safe-area-inset-top)) 8px calc(10px + env(safe-area-inset-bottom));overflow:auto;touch-action:pan-y}
 #panel.show,#modal.show{display:flex}
-.win{background:#110f1f;border:2px solid #000;box-shadow:5px 5px 0 #000,inset 0 0 0 2px var(--ln);width:100%;max-width:460px;padding:12px}
+.win{margin-top:auto;background:#110f1f;border:2px solid #000;box-shadow:5px 5px 0 #000,inset 0 0 0 2px var(--ln);width:100%;max-width:460px;padding:12px}
 .win h2{color:var(--am);font-size:14px;letter-spacing:.25em;margin-bottom:8px;text-shadow:2px 2px 0 #7d3a10}
 .tabs{display:flex;gap:4px;margin-bottom:10px}.tabs button{flex:1}.tabs.tw{flex-wrap:wrap}.tabs.tw button{flex:1 1 30%;font-size:10px;padding:7px 2px}
 #panel.sheet{align-items:flex-end;background:#07060f55}#panel.sheet .win{max-height:62vh;overflow:auto;border-bottom:none}
@@ -327,10 +327,10 @@ function burnDirs(p,to){const from=anchor().x!=null?anchor():station();const up=
 function beginBurns(toId){const to=objById(toId),p=tripPlan(to),dirs=burnDirs(p,to);closePanel();
  if(G.docked){G.docked=false;const s=G.ship;s.x=0;s.y=-70;s.vx=s.vy=0;s.ang=Math.PI/2}
  G.burn={to:toId,n:1,dirs,dir:dirs[0],dv:p.dv/2,done:0,errs:[],was:false,plan:p};view='flight';G.held=null;SFX.beep();
- say(`Burn 1: point the nose at the ${dirs[0]>0?'PROGRADE ▶':'◀ RETROGRADE'} marker, then HOLD BURN. Let go in the green!`)}
+ say(`Burn 1: point the nose at the ${dirs[0]>0?'PROGRADE':'RETROGRADE'} marker (it depends on where we are around Earth), then HOLD BURN. Let go in the green!`)}
 function burnStep(dt){const B=G.burn,s=G.ship,K=IN.keys;let jx=IN.jx,jy=IN.jy;const kx=(K.d||K.arrowright?1:0)-(K.a||K.arrowleft?1:0),ky=(K.w||K.arrowup?1:0)-(K.s||K.arrowdown?1:0);if(kx||ky){jx=kx;jy=ky}
  if(Math.hypot(jx,jy)>.2){const des=Math.atan2(jy,jx),err=wrap(des-s.ang);s.ang+=clamp(err,-3*dt,3*dt)}
- const tgt=B.dir>0?0:Math.PI,err=Math.abs(wrap(tgt-s.ang));B.err=err;
+ const tgt=burnTgt(B),err=Math.abs(wrap(tgt-s.ang));B.err=err;
  if(IN.boost&&G.fuel>0){B.was=true;const rate=B.dv/3.2,eff=Math.max(0,Math.cos(err));B.done+=rate*eff*dt;const f=tripFuel(rate*dt);G.fuel=Math.max(0,G.fuel-f);burnFx=1.6;thrustSnd(true);
   for(let i=0;i<3;i++){const b=s.ang+Math.PI+rnd(-.2,.2);addP(s.x-Math.cos(s.ang)*7.5,s.y-Math.sin(s.ang)*7.5,Math.cos(b)*rnd(20,40),Math.sin(b)*rnd(20,40),rnd(.2,.5),pick([PAL.w,PAL.a,PAL.o,PAL.e]))}
   if(B.done/B.dv>1.3){azR('overburn');finishBurn()}}
@@ -342,7 +342,7 @@ function startTrip(toId,tow,prepaid){const to=objById(toId),p=tripPlan(to),from=
  view='map';SFX.ok();say(tow?'Tow tug hooked on. Embarrassing… but cheap-ish.':pick(['Wheee! Fast-forwarding the coast…','Coasting! Watch us swing around.','Look at that view! Chirp!']))}
 function tripShipPos(){const A=G.anim,to=objById(A.to);const e=A.p<.5?2*A.p*A.p:1-Math.pow(-2*A.p+2,2)/2;const th=Math.atan2(to.y,to.x)+(1-e)*A.phi0;const r=A.r0+(Math.hypot(to.x,to.y)-A.r0)*e;
  return{x:r*Math.cos(th),y:r*Math.sin(th)}}
-function drawBurnHUD(P,now){const B=G.burn,s=G.ship,sp=P(s.x,s.y);const R=Math.min(W,H)*.3,tgt=B.dir>0?0:Math.PI;const al=(B.err||9)<.14;
+function drawBurnHUD(P,now){const B=G.burn,s=G.ship,sp=P(s.x,s.y);const R=Math.min(W,H)*.3,tgt=burnTgt(B);const al=(B.err||9)<.14;
  for(let a=0;a<6.28;a+=.06)px(PAL.s,sp[0]+Math.cos(a)*R,sp[1]-Math.sin(a)*R);
  const mx=sp[0]+Math.cos(tgt)*R,my=sp[1]-Math.sin(tgt)*R;const c=al?PAL.t:(Math.floor(now/250)%2?PAL.a:PAL.U);for(let i=-5;i<=5;i++){px(c,mx+Math.cos(tgt)*Math.abs(i)*-1.2,my+i,2,1)}pcirc(mx,my,7,c);
  ptext(cx,B.dir>0?'PROGRADE':'RETROGRADE',mx,my+10,c,1);
@@ -458,7 +458,7 @@ function renderArena(now,rdt){const s=G.ship,a=anchor();
  const P=(x,y)=>[ox+(x-cwx)*z,oy-(y-cwy)*z];
  cx.fillStyle='#05040b';cx.fillRect(0,0,W,H);
  for(const st of stars){const X=((W/2+Math.cos(st[1])*st[0]-cwx*z*.02*st[2])%W+W)%W,Y=((H/2-Math.sin(st[1])*st[0]+cwy*z*.02*st[2])%H+H)%H;px(st[2]>.93?PAL.w:st[2]>.6?PAL.S:PAL.s,X,Y)}
- const gy=H*.86;for(let y=Math.floor(gy);y<H;y++){const k=(y-gy)/(H-gy);for(let x=0;x<W;x+=1){if(k<.08&&(x+y)%2)continue;px(k<.05?'#6fb0ff':k<.2?'#2a62c0':'#1e4fa8',x,y)}}
+ const gy=G.burn?H*9:H*.86;if(G.burn)burnEarth();for(let y=Math.floor(gy);y<H;y++){const k=(y-gy)/(H-gy);for(let x=0;x<W;x+=1){if(k<.08&&(x+y)%2)continue;px(k<.05?'#6fb0ff':k<.2?'#2a62c0':'#1e4fa8',x,y)}}
  const off=(G.t*1.5)%(W*2);for(let i=0;i<12;i++){const cxp=((hash(i)*W*2-off)%(W*2)+W*2)%(W*2)-W*.3,cyp=gy+6+hash(i+5)*(H-gy);for(let j=0;j<6;j++)px(j<2?PAL.w:'#c8d4ee',cxp+hash(i*7+j)*16,cyp+hash(i*3+j)*5,3,2)}
  // anchor
  if(a.kind==='station'){const p=P(0,0);for(const k in MODS)if(G.mods[k]){const q=P(MODS[k].pos[0],MODS[k].pos[1]);drawModule(k,q[0],q[1],z,false,now)}drawSprite(SP.depot,p[0],p[1],Math.PI/2,Math.max(1.2*z,.7));if(G.carry&&!(G.anim&&G.anim.type==='attach')){const q=P(MODS[G.carry.mod].pos[0],MODS[G.carry.mod].pos[1]);drawModule(G.carry.mod,q[0],q[1],z,true,now);ptext(cx,MODS[G.carry.mod].n,q[0],q[1]-Math.max(10,10*z),PAL.t,1)}const q=P(PORT.x,PORT.y);
@@ -473,7 +473,7 @@ function renderArena(now,rdt){const s=G.ship,a=anchor();
   drawSprite(SP.deb[dd.v],p[0],p[1],dd.ang,Math.max(.5*z,.7));if(Math.floor(now/400+dd.v)%3===0)px(PAL.y,p[0]+3,p[1]-3)}
  for(const p of parts){const q=P(p.x,p.y);const sz=Math.max(1,Math.round(z*.8));px(p.col,q[0],q[1],sz,sz)}
  // ship
- const sp=P(s.x,s.y),sc=Math.max(SHIPDEF.mpp*z,.85);if(burnFx>0)flameAt(sp[0],sp[1],s.ang,sc,now,burnFx);drawSprite(SP.ship,sp[0],sp[1],s.ang,sc);
+ const sp=P(s.x,s.y),sc=Math.max(SHIPDEF.mpp*z,.85);if(burnFx>0)flameAt(sp[0],sp[1],s.ang,sc,now,burnFx);drawSprite(SP.ship,sp[0],sp[1],s.ang,sc);rcsDraw(sp,sc,now);
  if(G.held){const o=objById(G.held.id);if(o){const n=P(...nose()),p=P(o.lx,o.ly);const L=Math.hypot(p[0]-n[0],p[1]-n[1]);for(let i=0;i<L;i++)px(i%2?PAL.S:PAL.g,n[0]+(p[0]-n[0])*i/L,n[1]+(p[1]-n[1])*i/L);drawSprite(SP[KIND[o.kind].spr],p[0],p[1],o.ang,Math.max(KIND[o.kind].mpp*z,.8))}}
  else if(!G.docked){const n=nose(),q=P(n[0]+Math.cos(s.ang)*.6,n[1]+Math.sin(s.ang)*.6);drawSprite(SP.claw,q[0],q[1],s.ang+Math.PI,Math.max(.6,.4*z))}
  if(G.carry){const n=nose();let X2=n[0]+Math.cos(s.ang)*3.5,Y2=n[1]+Math.sin(s.ang)*3.5;if(G.anim&&G.anim.type==='attach'){const t=MODS[G.carry.mod].pos,e=G.anim.p;X2+=(t[0]-X2)*e;Y2+=(t[1]-Y2)*e}const q=P(X2,Y2);drawSprite(SP.crate,q[0],q[1],s.ang,Math.max(.5*z,.8))}
@@ -1170,7 +1170,7 @@ function objective(){if(typeof dishOpen!=='undefined'&&dishOpen)return`<b>${G.lo
  if(G.anim&&G.anim.type==='trip'){const A=G.anim;return`<b>ORBITAL TRANSFER</b> · T+${fmtT(A.time*A.p)} of ${fmtT(A.time)}<br><span style="color:#7a7398">Hohmann + phasing + plane change. Watch the map!</span>`}
  if(G.anim&&G.anim.type==='attach')return'<b>ATTACHING…</b> clamps engaging, bolts driving.';
  if(G.anim)return'<b>DOCKING…</b> soft capture!';
- if(G.burn){const B=G.burn;const what=B.land?'DEORBIT BURN':B.ascent?'ORBIT INSERTION':`BURN ${B.n}/${B.of||2}`;return`<b>${what}</b> · Point the nose at the <b>${B.dir>0?'PROGRADE ▶':'◀ RETROGRADE'}</b> marker. Hold <b>BURN</b>, let go in the <span style="color:#43d1c4">green zone</span>.`}
+ if(G.burn){const B=G.burn;const what=B.land?'DEORBIT BURN':B.ascent?'ORBIT INSERTION':`BURN ${B.n}/${B.of||2}`;return`<b>${what}</b> · Point the nose at the <b>${B.dir>0?'PROGRADE':'RETROGRADE'}</b> marker. Hold <b>BURN</b>, let go in the <span style="color:#43d1c4">green zone</span>.`}
  if(G.docked){if(c&&tp.type==='supply')return hasSupply(c)?'Cargo aboard — it unloads when you dock.':'<b>SUPPLY RUN</b> · Tap <b>LAND</b>: load the cargo at Knight Field, then launch back here.';
   if(c&&tp.deliver==='ground'&&hasSupply(c))return'<b>DELIVER</b> · This cargo goes to Earth. Tap <b>LAND AT KNIGHT FIELD</b>.';
   return c?'<b>STEP 2</b> · Tap <b>LAUNCH</b>. The transfer plan shows Δv and fuel.':'<b>STEP 1</b> · Tap <b>STATION</b> and accept a contract.'}
@@ -1195,7 +1195,7 @@ function askLand(){closePanel();const dv=deorbitDv(),f=tripFuel(dv),enough=f+250
  <b>How it flies:</b> tap <b>↺ ↻</b> to line the Ex-3 up with the <b>amber ghost</b>. The dotted line shows where you'll come down. Azure calls the <b>belly flop</b>: you fall straight down, belly flat. Tap <b>LEGS DOWN</b>, then <b>LIGHT ENGINES</b> when the LIGHT mark reaches you, and slide the throttle to the amber notch until you touch down. Legs and engines have safety nets.</div>
  ${enough?`<button class="hot" style="width:100%;padding:12px" onclick="closeModal();beginLand()">START DEORBIT BURN</button>`:`<p style="color:#d6454e;font-size:12px">Not enough propellant for the deorbit burn.</p>`}<button style="width:100%;margin-top:6px" onclick="closeModal()">CANCEL</button>`)}
 function beginLand(){const dv=deorbitDv();if(G.hoses.F||G.hoses.O){G.hoses.F=G.hoses.O=0}if(G.docked){G.docked=false;const s=G.ship;s.x=0;s.y=-70;s.vx=s.vy=0;s.ang=Math.PI/2}G.held=null;closePanel();
- G.burn={to:'ground',n:1,of:1,dirs:[-1],dir:-1,dv,done:0,errs:[],was:false,land:true};view='flight';say('Deorbit burn: point <b>RETROGRADE ◀</b> and hold BURN.')}
+ G.burn={to:'ground',n:1,of:1,dirs:[-1],dir:-1,dv,done:0,errs:[],was:false,land:true};view='flight';say('Deorbit burn: point <b>RETROGRADE</b> (opposite our motion around Earth) and hold BURN.')}
 function finishBurn(){const B=G.burn;const miss=Math.abs(1-B.done/B.dv)+Math.min(.3,B.lastErr||0);B.errs.push(miss);IN.boost=false;$('boost').classList.remove('on');thrustSnd(false);burnFx=0;
  const g=miss<.05?'PERFECT':miss<.12?'GOOD':'SLOPPY';floatTxt(G.ship.x,G.ship.y+15,g+'!');SFX[g==='SLOPPY'?'bad':'ok']();azR(g==='PERFECT'?'perfect':g==='GOOD'?'good':'sloppy');
  if(G.job){G.job.burns++;if(g==='PERFECT')G.job.perfect++}
@@ -1209,7 +1209,7 @@ function tripTick(rdt){const A=G.anim,to=objById(A.to);if(!to){G.anim=null;retur
  if(A.p>=1){G.anim=null;thrustSnd(false);
   G.objs=G.objs.filter(o=>o.id==='station'||o.id===A.to||(G.contract&&o.id===G.contract.target&&!o.stowed));
   G.loc=A.to;const s=G.ship;to.lx=to.ly=0;view='flight';camZ=.3;SFX.clunk();flash=.2;
-  if(G.burn){G.burn.n=2;s.x=0;s.y=-2400;s.vx=s.vy=0;s.ang=Math.PI/2;say(`Burn 2: ${G.burn.dir>0?'PROGRADE ▶':'◀ RETROGRADE'} to match orbits. Point, hold, release in the green!`)}
+  if(G.burn){G.burn.n=2;s.x=0;s.y=-2400;s.vx=s.vy=0;s.ang=Math.PI/2;say(`Burn 2: ${G.burn.dir>0?'PROGRADE':'RETROGRADE'} to match orbits. Point, hold, release in the green!`)}
   else{const d=G.arrive||300;G.arrive=0;s.x=rnd(-.3,.3)*d;s.y=-d;s.vx=0;s.vy=1;s.ang=Math.PI/2;say(to.kind==='station'?`Depot in sight, ${d.toFixed(0)} m out. Dock it!`:'Here we are! Fly it in.')}save()}}
 function stickY(){const K=IN.keys;let y=IN.jy;const ky=(K.w||K.arrowup?1:0)-(K.s||K.arrowdown?1:0);if(ky)y=ky;return y}
 for(const[k,v]of Object.entries({'α':'000011101110011','γ':'000101101010010','Α':'000011101110011','Γ':'000101101010010','°':'010101010000000','◀':'001011111011001','▶':'100110111110100','▼':'000111111010000','▲':'000010111111000','…':'000000000000101','—':'000000111000000','▮':'111111111111111','▯':'111101101101111','↺':'111101001101011','↻':'111101100101110','✕':'101101010101101','→':'000001111001000'}))FONT[k]=v;
@@ -1623,7 +1623,7 @@ function meco(E2,O){engSnd(0);thrustSnd(false);windSnd(0);SFX.clamp();buzz([30,3
  if(need>G.fuel*1.02){G.loc='ground';G.objs=G.objs.filter(o=>o.id!=='tmp');G.earth=null;return ascentAbort(`MECO left a ${dvc.toFixed(0)} m/s circularization + ${tp.dv.toFixed(0)} m/s transfer — that's ${need.toFixed(0)} kg and the tank has ${G.fuel.toFixed(0)}.`,'A flatter, on-chevron climb leaves less work for the Ex-3. Or carry more propellant.')}
  G.earth=null;const s=G.ship;s.x=0;s.y=0;s.vx=s.vy=0;s.ang=Math.PI/2;const errAvg=E2.errT?E2.err/E2.errT:20;
  G.burn={to:'station',n:1,of:1,dirs:[1],dir:1,dv:dvc,done:0,errs:[],was:false,ascent:true,pre:Math.min(.4,errAvg/60+E2.qOver*.04)};
- say(`MECO! EX-3 engines off. Coasting to apogee ${O.apo.toFixed(0)} km — circularize: <b>PROGRADE ▶</b> ${dvc.toFixed(0)} m/s.`)}
+ say(`MECO! EX-3 engines off. Coasting to apogee ${O.apo.toFixed(0)} km — circularize: <b>PROGRADE</b> ${dvc.toFixed(0)} m/s.`)}
 function openGround(tab){if(tab)panelTab=tab;else if(!['g_svc','g_rep','g_shop','g_cargo','g_jobs','g_launch'].includes(panelTab))panelTab='g_svc';$('panel').classList.add('show','sheet');renderGroundPanel()}
 function renderGroundPanel(){const p=$('pw'),t=panelTab;const tb=(k,n)=>`<button class="${t===k?'on':''}" onclick="panelTab='${k}';renderGroundPanel()">${n}</button>`;
  let h=`<h2>KNIGHT FIELD</h2><div class="tabs tw">${tb('g_svc','FUEL')}${tb('g_rep','REPAIR')}${tb('g_shop','SHOP')}${tb('g_cargo','CARGO')}${tb('g_jobs','JOBS')}${tb('g_launch','LAUNCH')}</div>`;refOn=false;h+=dishCard();
@@ -1978,16 +1978,18 @@ const RCS={a:.32,burn:.3};// accel as a fraction of main thrust, fuel as a fract
 (function(){const st=document.createElement('style');st.textContent=`#rcs{position:absolute;left:8px;bottom:calc(172px + env(safe-area-inset-bottom));display:grid;grid-template-columns:30px 30px 30px;grid-template-rows:30px 30px 30px;gap:2px;pointer-events:auto}
 #rcs button{padding:0;font-size:12px;width:30px;height:30px;line-height:1;touch-action:none;background:#1a1730}#rcs button.on{background:#43d1c4;color:#000}
 #rcs span{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--dim);letter-spacing:.05em}
+#panel .win,#modal .win{max-height:calc(80dvh - env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;border-radius:0}
 #azc{pointer-events:auto;cursor:pointer;touch-action:manipulation}`;document.head.appendChild(st);
  const d=document.createElement('div');d.id='rcs';d.innerHTML='<span>RCS</span>';
  [['u','▲',2,1],['l','◀',1,2],['r','▶',3,2],['d','▼',2,3]].forEach(([k,t,c,r])=>{const b=document.createElement('button');b.textContent=t;b.style.gridColumn=c;b.style.gridRow=r;b.dataset.k=k;
   const on=e=>{e.preventDefault();IN['rcs_'+k]=true;b.classList.add('on');buzz(6)},off=()=>{IN['rcs_'+k]=false;b.classList.remove('on')};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);d.appendChild(b)});
  $('ctrl').appendChild(d)})();
+setInterval(()=>{const r=$('rcs');if(r)r.style.display=(G&&(G.burn||G.docked||G.earth))?'none':''},200);
 let rcsT=0;
 function rcsStep(s,dt,acc){const K=IN.keys;
  const rx=((IN.rcs_r||K.l)?1:0)-((IN.rcs_l||K.j)?1:0),ry=((IN.rcs_u||K.i)?1:0)-((IN.rcs_d||K.k)?1:0);if(!(rx||ry)||G.fuel<=0)return;
- const m=Math.hypot(rx,ry),ux=rx/m,uy=ry/m,a=acc*RCS.a;s.vx+=ux*a*dt;s.vy+=uy*a*dt;
+ const m=Math.hypot(rx,ry),ux=rx/m,uy=ry/m,a=acc*RCS.a;RCSv={ux,uy,t:performance.now()};s.vx+=ux*a*dt;s.vy+=uy*a*dt;
  const v=Math.hypot(s.vx,s.vy);if(v>SHIPDEF.vmax){s.vx*=SHIPDEF.vmax/v;s.vy*=SHIPDEF.vmax/v}
  G.fuel=Math.max(0,G.fuel-SHIPDEF.burn*RCS.burn*dt);if(G.job)G.job.localFuel+=SHIPDEF.burn*RCS.burn*dt;
  // jets fire opposite the push, from the hull side facing it
@@ -2022,6 +2024,23 @@ const TRINKETS=[
 function trinketRoll(){G.trinkets=G.trinkets||[];const left=TRINKETS.filter(t=>!G.trinkets.includes(t.id));if(!left.length||Math.random()>.35)return null;const t=pick(left);G.trinkets.push(t.id);return t}
 const _completeJob=completeJob;completeJob=function(c,lines,base,extra){const t=trinketRoll();if(t){lines=(lines||[]).concat([`<span class="y">Azure found: ${t.n}!</span>`]);setTimeout(()=>{azCD=0;azExcite();say(`Look what I found! A ${t.n.toLowerCase()}. It's going on the shelf.`)},900)}return _completeJob(c,lines,base,extra)};
 function shelfCard(){const got=G.trinkets||[];if(!got.length)return'';return`<div class="c"><h3>AZURE'S SHELF · ${got.length}/${TRINKETS.length}</h3>`+TRINKETS.map(t=>got.includes(t.id)?`<button style="margin:2px;font-size:11px" onclick="say('${t.d.replace(/'/g,"\\'")}')">${t.n}</button>`:`<button style="margin:2px;font-size:11px;opacity:.35" disabled>???</button>`).join('')+'</div>'}
+// ---- RCS jets drawn at screen scale so they stay visible when the camera is zoomed out
+let RCSv={ux:0,uy:0,t:0};
+function rcsDraw(sp,sc,now){if(now-RCSv.t>90)return;const dx=-RCSv.ux,dy=RCSv.uy,off=Math.max(6,9*sc);// world→screen flips y
+ for(let i=0;i<3;i++){const sx=sp[0]+dx*off+(-dy)*(i-1)*2,sy=sp[1]+dy*off+dx*(i-1)*2,L=4+Math.random()*5;
+  for(let k=0;k<L;k++)px(k<2?PAL.w:'#dcd4f4',sx+dx*k,sy+dy*k,1,1)}}
+// ---- Prograde/retrograde follow the real orbit: the burn view is star-fixed, so the
+// direction depends on where we are around Earth (clockwise orbits: v̂ = θ − 90°)
+// object positions are stored in a frame that turns with the depot; add the depot's real orbital phase
+function orbPhase(){const st=station(),r=st?Math.hypot(st.x,st.y):RE+400;return -Math.sqrt(MU/(r*r*r))*G.t}// clockwise
+function burnTh(B){if(B.thN!==B.n||B.th==null){let o=B.n===2?objById(B.to):(anchor().x!=null?anchor():station());B.th=o&&o.x!=null?Math.atan2(o.y,o.x)+orbPhase():Math.random()*6.283;B.thN=B.n}return B.th}
+function burnTgt(B){const th=burnTh(B);return wrap(th+(B.dir>0?-1:1)*Math.PI/2)}
+function burnEarth(){const B=G.burn;if(!B)return;const na=burnTh(B)+Math.PI,ux=Math.cos(na),uy=-Math.sin(na),M=Math.min(W,H),Rp=M*4,L=M*.43;
+ const ex=W/2+ux*(Rp+L),ey=H/2+uy*(Rp+L);cx.fillStyle='#2a62c0';cx.beginPath();cx.arc(ex,ey,Rp+3,0,6.283);cx.fill();cx.fillStyle='#1e4fa8';cx.beginPath();cx.arc(ex,ey,Rp,0,6.283);cx.fill();
+ cx.strokeStyle='#6fb0ff';cx.lineWidth=2;cx.beginPath();cx.arc(ex,ey,Rp+3,0,6.283);cx.stroke();
+ // a few cloud streaks along the limb
+ for(let i=0;i<10;i++){const a=na+Math.PI+(hash(i)-.5)*.5,r=Rp-4-hash(i+3)*M*.12,qx=ex+Math.cos(a)*r,qy=ey-Math.sin(a)*r;px('#c8d4ee',qx,qy,4,2)}
+ const lx=W/2+ux*L*.78,ly=H/2+uy*L*.78;ptext(cx,'EARTH',lx,ly,'#6fb0ff',1)}
 
 // ================= BOOT =================
 addEventListener('resize',resize);resize();
@@ -2039,7 +2058,7 @@ if(!G.contract&&!G.offers.length)genOffers();
 $('go').onclick=()=>{audioInit();$('tap').style.display='none';if(G.loc==='ground'){openGround();say('Back at Knight Field. Smells like jet fuel. Chirp!')}else if(G.docked){openStation('contracts');say(G.done?'Welcome back, boss! Pick a job.':'Hi! I\'m Azure, your copilot. Pick a contract — chirp!')}};
 requestAnimationFrame(frame);
 window.LL={get G(){return G},acceptContract,askTrip,startTrip,openEng,closeEng,release,get E(){return E},L3,LO,targets,trayTiles,beginBurns,finishBurn,action,doAction,objective,anchor,focusPoint,get view(){return view},
- askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
+ askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,burnTgt,trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
 </script>
 <script>
 (function(){const K=['lastlight_v2','lastlight_opts'],$i=id=>document.getElementById(id);
