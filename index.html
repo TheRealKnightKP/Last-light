@@ -588,6 +588,7 @@ function makeBus(tp,c,nCauses){c=c||{};const F=FAM[tp.fam];const b={fam:tp.fam,v
    const ks=Object.keys(b.parts);for(let n=0;n<1+((Math.random()*2)|0);n++){const s2=pick(ks);b.parts[s2].scr[(Math.random()*2)|0]=0;b.float.push({view:'in',nx:rnd(.05,.95),ny:rnd(.08,.92),size:'m3'})}}}
  if(Math.random()<.3+Math.min(.3,G.done*.04)){const i=(Math.random()*4)|0;if(b.cover.s[i]===2)b.cover.s[i]=3}
  const busy=[...b.ext.holes,b.ext.foil].filter(Boolean);const nsc=1+((Math.random()*3)|0);for(let i=0,tries=0;i<nsc&&tries<50;tries++){const sc={x:rnd(.1,.9),y:rnd(.08,.22)+(Math.random()<.5?0:.68)};if(busy.every(o=>Math.hypot(o.x-sc.x,(o.y-sc.y)*.6)>.16)){b.ext.scuffs.push(sc);busy.push(sc);i++}}
+ for(const k in b.parts){const P=b.parts[k];if(P.dead&&Math.random()<(T>=2?.5:.35))P.legacy=true}
  b.causes=causes;return b}
 let engOpen=false,E=null,tool='screw',efl=[],sparks=[];
 const TOOLS3=[['screw','SCREW','torque'],['camera','CAMERA','camera'],['meter','METER','meter'],['gripper','GRIPPER','gripper'],['cable','CABLE KIT','cable'],['welder','WELDER','welder'],['cutter','CUTTER','cutter']];
@@ -719,7 +720,7 @@ function act(t,X,Y){const b=bus(),L=L3();const P=t.s!=null?b.parts[t.s]:null,C=t
    P.plug=!P.plug;SFX.tick();buzz(P.plug?20:12);elog(`${pname(P.type)} connector ${P.plug?'mated — click':'unplugged'}.`);return}
   if(t.k==='part'){if(P.scr.some(v=>v)){floatE('STILL SCREWED IN',PAL.a);elog('Remove its 2 mounting screws first.','y');SFX.bad();return}if(P.plug&&P.type!=='tank'&&P.type!=='valve'){floatE('UNPLUG IT FIRST',PAL.a);SFX.bad();return}E.drag={k:'part',s:t.s,x:X,y:Y};return}}
  if(tool==='camera'){flash=.08;SFX.beep();let m='';
-  if(t.k==='part'){if(P.dead){P.rev.dead=1;m=P.type==='battery'?'<span class="r">Battery case SWOLLEN. Cells cooked.</span>':P.type==='wheel'?'<span class="r">Rotor won\'t turn by hand. Bearing SEIZED.</span>':P.type==='sensor'?'<span class="r">Detector window fogged and scorched.</span>':'<span class="r">Scorch marks on the board — overheated!</span>'}
+  if(t.k==='part'){if(P.dead){P.rev.dead=1;if(P.legacy)setTimeout(()=>elog('<span class="y">Legacy model, out of production — no spare will fit. Refurbish it on the BENCH.</span>'),60);m=P.type==='battery'?'<span class="r">Battery case SWOLLEN. Cells cooked.</span>':P.type==='wheel'?'<span class="r">Rotor won\'t turn by hand. Bearing SEIZED.</span>':P.type==='sensor'?'<span class="r">Detector window fogged and scorched.</span>':'<span class="r">Scorch marks on the board — overheated!</span>'}
    else if(P.scr.some(v=>v===1)){P.rev.fit=1;m='<span class="y">Fitting screws backed out — leak path!</span>'}else m=`${pname(P.type)} · ${COMPDEF[P.type].m} kg. Looks OK.`}
   else if(t.k==='cable'){if(C.cut){C.rev.cut=1;m='<span class="r">Cable SEVERED!</span>'}else if(C.chafe){C.rev.chafe=1;m='<span class="r">Insulation chafed — bare copper on the frame!</span>'}else m='Harness intact.'}
   else if(t.k==='conn'){if(P.corr){P.rev.corr=1;m='<span class="r">Green CORROSION crusted on the pins!</span>'}else if(P.loose){P.rev.loose=1;m='<span class="y">Connector not fully seated…</span>'}else m='Connector seated, pins clean.'}
@@ -758,7 +759,7 @@ const eUp=e=>{if(!engOpen||!E)return;const[X,Y]=ep(e),b=bus();E.down=false;E.hol
   const L=L3();if(Y>L.tray.y-6)return;if(findHole(X,Y,d.size==='m5'?'m3':'m5')){SFX.bad();floatE('WRONG SIZE',PAL.r,X,Y);elog(`That's an ${d.size.toUpperCase()} — wrong size for this hole.`,'y');return}
   if((G.tup.gripper||0)>=2){floatE('SNAPPED BACK',PAL.t,X,Y);SFX.clink();return}if(!takeScrew(d.size))return;b.float.push({view:b.view,x:X,y:Y,vx:rnd(-9,9),vy:rnd(-7,7),a:0,size:d.size});SFX.clink();azCD=0;azR('drop');return}
  if(d.k==='panel'){const O=LO(),CR=O.cover;if(X>CR.x-6&&X<CR.x+CR.w+6&&Y>CR.y-6&&Y<CR.y+CR.h+6){const c=b.cover;c.off=false;c.s=[0,0,0,0];c.anim=0;SFX.slide();SFX.latch();buzz(20);elog('Panel back in place. Now screw it down (SCREW tool).','g');tool='screw';setToolUI()}return}
- if(d.k==='part'){const L=L3();if(Y>L.tray.y-4){const P=b.parts[d.s];b.tray.push({type:P.type,dead:P.dead,heal:!P.dead});P.present=false;P.dead=false;SFX.thunk();buzz(15);elog(`${pname(P.type)} removed.`)}return}
+ if(d.k==='part'){const L=L3();if(Y>L.tray.y-4){const P=b.parts[d.s];b.tray.push({type:P.type,dead:P.dead,heal:!P.dead,legacy:!!P.legacy});P.present=false;P.dead=false;SFX.thunk();buzz(15);elog(`${pname(P.type)} removed.`)}return}
  if(d.k==='cell'){const L=L3();if(Y>L.tray.y-4){const cl=b.ext.cells[d.i];b.tray.push({type:'cell',dead:cl.cracked,heal:!cl.cracked});cl.present=false;cl.cracked=false;SFX.clunk();elog('Solar cell removed.')}return}
  if(d.k!=='tray')return;const it=d.it;
  if(b.view==='out'){const O=LO();
@@ -770,6 +771,8 @@ const eUp=e=>{if(!engOpen||!E)return;const[X,Y]=ep(e),b=bus();E.down=false;E.hol
    if(it.src==='kit'&&b.tray.some(x=>x.type==='fuse'&&x.heal)&&!b.tray.some(x=>x.type==='fuse'&&x.dead))penal(PEN.fuse,'wasted fuse');takeTray(it);b.fuses[f]=it.dead?'blown':'ok';SFX.clunk();floatE('FUSE IN',PAL.t);elog(`${f} seated.`);return}}return}
  if(['patch','cell'].includes(it.type)){elog('That one goes on the OUTSIDE.','y');return}
  for(const k in b.parts){const r=L.slot(k),P=b.parts[k];if(X>r.x&&X<r.x+r.w&&Y>r.y&&Y<r.y+r.h){if(P.present){elog('Slot occupied.','y');return}if(it.type!==P.type){SFX.bad();elog(`Won't fit — that slot takes a ${pname(P.type)}.`,'r');return}
+  if(it.src==='kit'&&P.legacy){SFX.bad();floatE('LEGACY PART',PAL.a);elog(`This bus uses a <b>legacy</b> ${pname(P.type)} — no modern spare fits. Pull the old one and refurbish it on the <b>BENCH</b>.`,'y');azCD=0;say('Legacy hardware! We\'ll have to fix the original on the bench.');return}
+  if(it.src==='tray'&&it.dead&&P.legacy){SFX.bad();elog('Still dead. Tap <b>BENCH ▸</b> to refurbish it first.','y');return}
   if(it.src==='kit'&&b.tray.some(x=>x.type===it.type&&x.heal&&!x.benched))penal(PEN.spare,'healthy part swapped');
   takeTray(it);P.present=true;P.dead=!!it.dead;P.scr=[0,0];P.plug=false;P.loose=false;SFX.clunk();floatE('SEATED',PAL.t);elog(`${it.src==='kit'?'New':'Old'} ${pname(P.type)} seated. Screw it down and plug it in.`,'g');return}}};
 function takeTray(it){const b=bus();if(it.src==='kit')G.inv[it.type]--;else if(it.src==='tray')b.tray.splice(it.j,1)}
@@ -807,7 +810,7 @@ function runTest(){const b=bus();if(E&&E.testing)return;SFX.beep();elog('Running
  else{b.repaired=true;returnTray(b);SFX.cash();buzz([30,40,60]);elog(`ALL GREEN ✓ Client confirms nominal telemetry!${b.pen?` Penalties: −${b.pen} CR`:' Clean job — no penalties!'}`,'g');floatE('ALL SYSTEMS GO',PAL.t);flash=.2;for(let i=0;i<40;i++)sparks.push({x:W/2,y:H/3,vx:rnd(-90,90),vy:rnd(-90,30),t:1.2,c:pick([PAL.y,PAL.t,PAL.w])});azR('repaired');setTimeout(closeEng,2000)}},1100)}
 function hintText(){const b=bus();if(!b)return'';const X=b.ext;if(!b.cover.off&&b.cover.s.includes(3)&&b.cover.s.some(v=>v))return'One panel screw is stuck. WELDER to heat it, then SCREW.';
  for(const k in b.parts){const P=b.parts[k],C=b.cables[k];
-  if(P.rev.dead&&P.dead)return`That ${pname(P.type)} is toast. Breaker OFF, unplug, unscrew, drag to tray, NEW one in.`;
+  if(P.rev.dead&&P.dead)return P.legacy?`That ${pname(P.type)} is a LEGACY model — no spare fits. Breaker OFF, unplug, unscrew, drag it to the tray, then BENCH ▸ to refurbish it and put it back.`:`That ${pname(P.type)} is toast. Breaker OFF, unplug, unscrew, drag to tray, NEW one in.`;
   if(P.rev.corr&&P.corr)return'Corroded pins: breaker OFF, unplug, hold CABLE KIT on the connector to clean, plug back.';
   if(P.rev.loose&&P.loose)return'Loose connector — breaker OFF, GRIPPER tap it home.';
   if(C.rev.cut&&C.cut)return'Breaker OFF, hold the CABLE KIT on the cut.';if(C.rev.chafe&&C.chafe)return'Shorts blow fuses! Breaker OFF, CABLE KIT the chafe, then check that side\'s fuse.'}
@@ -1635,7 +1638,7 @@ function renderGroundPanel(){const p=$('pw'),t=panelTab;const tb=(k,n)=>`<button
   if(c&&tp.type==='supply'&&!hasSupply(c))rows+=`<div class="c"><h3>CONTRACT CARGO</h3>${tp.cargo==='propmod'?`Propellant module · ${tp.fuel} kg`:'Parts crate · 1200 kg'}<br><button class="hot" onclick="loadCargo('contract')">LOAD IT</button></div>`;
   rows+=`<div class="c"><h3>BUY CARGO FOR THE DEPOT</h3>Propellant module 1000 kg — <span class="pay">${Math.round(1000*1.1)} CR</span> (reserve ${G.stationFuel.toFixed(0)}/${stationCap()})<br><button ${G.credits<1100?'disabled':''} onclick="loadCargo('fuel')">BUY + LOAD</button><br><br>Parts crate (restocks depot shelves) — <span class="pay">1400 CR</span><br><button ${G.credits<1400?'disabled':''} onclick="loadCargo('parts')">BUY + LOAD</button></div>`;
   const cm=G.cargo.reduce((a,x)=>a+x.mass,0);rows+=`<div class="c"><h3>BAY</h3>${G.cargo.length?G.cargo.map(x=>`${x.name} ${x.mass} kg`).join('<br>'):'Empty'}<br><span class="m">${cm}/${SHIPDEF.cargoCap} kg · ${G.cargoSecure?'<span style="color:#43d1c4">LATCHED</span>':'not latched'}</span>${G.cargo.length?`<br><button onclick="secureCargo()">${G.cargoSecure?'LATCHED ✓':'LATCH CARGO'}</button>`:''}</div>`;h+=rows}
- else if(t==='g_jobs')h+=jobsHTML();
+ else if(t==='g_jobs')h+=benchOrdersCard()+jobsHTML();
  else if(t==='g_launch'){const ins=tripFuel(260),ok1=G.fuel>=ins,ok2=G.hull>=SHIPDEF.hullMax*.3,ok3=!(G.hoses.F||G.hoses.O),ok4=!G.cargo.length||G.cargoSecure;const ck=(ok,txt)=>`${ok?'<span style="color:#43d1c4">✓</span>':'<span style="color:#d6454e">✗</span>'} ${txt}<br>`;
   h+=`<div class="c"><h3>PRE-FLIGHT CHECKLIST</h3>${ck(ok1,`Propellant for circularization + transfer (~260 m/s ≈ ${ins.toFixed(0)} kg)`)}${ck(ok2,'Hull above 30%')}${ck(ok3,'Fuel lines disconnected')}${ck(ok4,'Cargo latched')}${ck(true,`Pauldron flight fee ${launchFee()} CR`)}<span class="m">The TX-04 Pauldron (side-mounted, storable propellant) stages at ~78 km and 2.9 km/s, then glides to the Pavise sea raft. The EX-3's 3 vacuum engines finish the climb, circularize at apogee and fly the usual 2-burn transfer up to the depot.</span></div>
    <button class="hot" style="width:100%;padding:14px;font-size:15px" ${ok1&&ok2&&ok3&&ok4?'':'disabled'} onclick="startAscent()">LAUNCH</button>`}
@@ -1685,7 +1688,7 @@ function drawRacks(src){const c=$('racks');if(!c)return;const x=c.getContext('2d
 function renderPanel(){const p=$('pw');const t=panelTab;const tb=(k,n)=>`<button class="${t===k?'on':''}" onclick="panelTab='${k}';renderPanel()">${n}</button>`;
  let h=`<h2>KNIGHT DEPOT</h2><div class="tabs tw">${tb('contracts','JOBS')}${tb('fuel','FUEL')}${tb('shop','SHOP')}${tb('upg','UPGRADES')}${tb('mods','MODULES')}${tb('svc','SERVICE')}</div>`;refOn=false;h+=dishCard();if(t==='svc')h+=shelfCard();
  if(G.stationFuel<800)h+=`<div class="c" style="border-color:${G.stationFuel<=0?'#d6454e':'#ffb43c'};color:${G.stationFuel<=0?'#d6454e':'#ffb43c'};font-size:11px">⚠ Depot reserve ${G.stationFuel.toFixed(0)} kg${G.stationFuel<=0?' — EMPTY':' — LOW'}</div>`;
- if(t==='contracts')h+=jobsHTML();
+ if(t==='contracts')h+=benchOrdersCard()+jobsHTML();
  else if(t==='fuel')h+=refuelHTML('depot');
  else if(t==='shop')h+=shopHTML('depot');
  else if(t==='upg'){h+=`<div class="c"><h3>KNIGHTSHIP EX-3</h3><canvas id="shipprev" width="64" height="40" style="width:100%;max-width:240px;image-rendering:pixelated;display:block;margin:0 auto;background:#0a0918;border:2px solid #000"></canvas></div>`;
@@ -2384,6 +2387,19 @@ AZL.bench=['Next!','Beautiful.'];
 
 function lockerSummary(){const nb=Object.values(G.broken||{}).reduce((a,b)=>a+b,0);return`Locker ${Math.round(lockerMass())}/${lockerCap()} kg`+(nb?` · <span class="r">${nb} broken part${nb>1?'s':''}</span> to refurbish`:'')}
 
+// ---------- workshop orders: clients send broken hardware to be refurbished (bench-only jobs) ----------
+const ORD_CL=['Orbital Weather Co.','Universidad Polar','KnightShip Fleet Ops','Tidewatch Imaging','Lumen Relay','Old Glory Sat Museum','Zenith Pharma Labs','Halcon Comms'];
+function benchOrders(){G.benchOrders=G.benchOrders||[];if(G.benchOrdAt!==G.done){G.benchOrdAt=G.done;const pool=['battery','wheel','computer','sensor','cell','antenna','valve','solar','tank'];const n=1+(Math.random()<.6?1:0);G.benchOrders=[];
+  for(let i=0;i<n;i++){const ty=pick(pool),pay=Math.round(((PRICE[ty]||150)*1.1+180)/10)*10;G.benchOrders.push({id:Date.now()%1e6+i,type:ty,pay,client:pick(ORD_CL),rush:Math.random()<.3})}}return G.benchOrders}
+function benchOrdersCard(){const L=benchOrders();if(!L.length)return'';return`<div class="c" style="border-color:#1d7d88"><h3 style="color:var(--te)">WORKSHOP ORDERS</h3><span class="m">Clients mail in dead hardware. Refurbish it on the bench — no flying.</span>`+
+ L.map(o=>`<div style="margin-top:6px"><b>${itemName(o.type)}</b> · ${o.client}${o.rush?' · <span class="y">RUSH +30%</span>':''}<br><span class="pay">${Math.round(o.pay*(o.rush?1.3:1))} CR</span> <span class="m">+50 per ★</span><br><button class="hot" onclick="startOrder(${o.id})">TO THE BENCH</button></div>`).join('')+'</div>'}
+function startOrder(id){const o=(G.benchOrders||[]).find(x=>x.id===id);if(!o)return;openBench(o.type,{kind:'order',id,from:G.docked?'station':G.loc==='ground'?'ground':null})}
+function bStars(){const B=BN;return(B.q.tn?B.q.torque/B.q.tn:1)>=.99&&!B.q.strip?3:B.q.strip>1?1:2}
+const _benchDone=benchDone;benchDone=function(){if(!BN||BN.src.kind!=='order')return _benchDone();const o=(G.benchOrders||[]).find(x=>x.id===BN.src.id),st=bStars(),from=BN.src.from;
+ if(o){const pay=Math.round(o.pay*(o.rush?1.3:1))+50*st;G.credits+=pay;G.benchOrders=G.benchOrders.filter(x=>x!==o);G.stats.refurb=(G.stats.refurb||0)+1;save();SFX.cash();buzz([30,40,60]);
+  BN.src={kind:'none'};closeBench();modal(`<h2>ORDER SHIPPED</h2><div class="c">${itemName(o.type)} refurbished for ${o.client}.<br>${'★'.repeat(st)}${'☆'.repeat(3-st)} workmanship<br><span class="pay">+${pay} CR</span></div><button class="hot" onclick="closeModal();${from==='ground'?"openGround('g_jobs')":"openStation('contracts')"}">BACK</button>`)}else{BN.src={kind:'none'};closeBench()}};
+const _closeBench=closeBench;closeBench=function(){const src=BN&&BN.src;_closeBench();if(src&&src.kind==='order'){if(src.from==='ground')openGround('g_jobs');else if(src.from==='station')openStation('contracts')}};
+
 // ================= BOOT =================
 addEventListener('resize',resize);resize();
 try{if(!load()||!G||G.v!==2)newGame();
@@ -2400,7 +2416,7 @@ if(!G.contract&&!G.offers.length)genOffers();
 $('go').onclick=()=>{audioInit();$('tap').style.display='none';if(G.loc==='ground'){openGround();say('Back at Knight Field. Smells like jet fuel. Chirp!')}else if(G.docked){openStation('contracts');say(G.done?'Welcome back, boss! Pick a job.':'Hi! I\'m Azure, your copilot. Pick a contract — chirp!')}};
 requestAnimationFrame(frame);
 window.LL={get G(){return G},acceptContract,askTrip,startTrip,openEng,closeEng,release,get E(){return E},L3,LO,targets,trayTiles,beginBurns,finishBurn,action,doAction,objective,anchor,focusPoint,get view(){return view},
- askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,burnTgt,openBench,closeBench,benchDone,openLocker,closeLocker,lockerMass,lockerCap,bGeo,bN,pathPx,bRect,bTargets,lkGeo,lkSync,get BN(){return BN},get LK(){return LK},trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
+ askLand,beginLand,startReentry,startAscent,openGround,openStation,renderPanel,renderGroundPanel,buyModule,attachModule,buyUpg,buyTool,buyPart,applyUpgrades,openMaint,deliverCargo,loadCargo,secureCargo,genOffers,makeContract,tierUnlocked,completeJob,SHIPDEF,TEMPL,FAM,MODS,UPG,save,get earth(){return G.earth},eGrade,arriveGround,openMx,closeMx,exIssues,get MX(){return MX},mxTargets,mxC,openDish,closeDish,rcsStep,burnTgt,openBench,closeBench,benchDone,openLocker,closeLocker,startOrder,benchOrders,lockerMass,lockerCap,bGeo,bN,pathPx,bRect,bTargets,lkGeo,lkSync,get BN(){return BN},get LK(){return LK},trinketRoll,shelfCard,get TRINKETS(){return TRINKETS},get DSH(){return DSH},dishGeo,azSet,azWhere,startReentry,exFx,ex3,station,objById,makeBus,bus};
 </script>
 <script>
 (function(){const K=['lastlight_v2','lastlight_opts'],$i=id=>document.getElementById(id);
